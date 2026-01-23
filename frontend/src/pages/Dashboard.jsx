@@ -1,0 +1,259 @@
+import React, { useEffect, useState } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
+import toast from 'react-hot-toast'; 
+import { 
+  BarChart, Bar, Tooltip, ResponsiveContainer, Cell 
+} from 'recharts'; 
+import api from '../api'; 
+import { 
+  LayoutDashboard, Dumbbell, Utensils, LogOut, 
+  Calendar, Flame, ChevronRight, Zap, Loader, Trophy
+} from 'lucide-react';
+
+const Dashboard = () => {
+  const navigate = useNavigate();
+  const [user, setUser] = useState(null);
+  
+  // Track if the user has a VALID profile
+  const [hasProfile, setHasProfile] = useState(false);
+
+  const [stats, setStats] = useState({ 
+    streak: 0, 
+    totalWorkouts: 0,
+    level: "Rookie", 
+    chartData: [] 
+  }); 
+  
+  const [loading, setLoading] = useState(true);
+  const [generating, setGenerating] = useState(false);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        if (!token) { navigate('/login'); return; }
+
+        const [userRes, statsRes, profileRes] = await Promise.all([
+          api.get('/auth/user'),
+          api.get('/tracking/stats'),
+          // Return null if 404
+          api.get('/profile/me').catch(() => ({ data: null })) 
+        ]);
+
+        setUser(userRes.data);
+        setStats(statsRes.data); 
+        
+        // CHECK: Does profile data exist?
+        if (profileRes.data && profileRes.data.age) {
+          setHasProfile(true);
+        } else {
+          setHasProfile(false);
+        }
+
+        setLoading(false);
+      } catch (err) {
+        console.error("Data load failed", err);
+        setLoading(false);
+      }
+    };
+    fetchData();
+  }, [navigate]);
+
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    toast.success("Logged out successfully");
+    navigate('/login');
+  };
+
+  // --- THE CORRECTED LOGIC ---
+  const handleGenerateWorkout = async () => {
+    // 1. IF NEW USER (No Profile): Go to Profile Setup Page
+    if (!hasProfile) {
+      // Navigate to the NEW USER page
+      navigate('/profile-setup'); 
+      return;
+    }
+
+    // 2. IF EXISTING USER: Generate Plan immediately
+    setGenerating(true);
+    try {
+      await api.post('/ai/generate'); 
+      toast.success("New Plan Generated!");
+      navigate('/workout-plan'); 
+    } catch (err) {
+      toast.error("Error generating plan.");
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-slate-900 flex items-center justify-center text-teal-400">
+        <Zap className="w-10 h-10 animate-spin" />
+      </div>
+    );
+  }
+
+  const displayName = user?.name || "Athlete";
+  const userInitial = displayName[0].toUpperCase();
+
+  return (
+    <div className="min-h-screen bg-slate-900 text-white font-sans flex relative overflow-hidden">
+      
+      {/* SIDEBAR */}
+      <aside className="hidden md:flex flex-col w-64 bg-slate-950/60 backdrop-blur-xl border-r border-white/10 h-screen fixed z-20">
+        <div className="p-6 border-b border-white/10">
+          <span className="text-2xl font-black italic tracking-tighter text-white">
+            TRAINER<span className="text-teal-400">AI</span>
+          </span>
+        </div>
+        <nav className="flex-1 p-4 space-y-2">
+          <Link to="/dashboard"><NavItem icon={<LayoutDashboard size={20}/>} label="Overview" active /></Link>
+          <Link to="/workout-plan"><NavItem icon={<Dumbbell size={20}/>} label="Workouts" /></Link>
+          <Link to="/nutrition"><NavItem icon={<Utensils size={20}/>} label="Nutrition" /></Link>
+          <Link to="/leaderboard"><NavItem icon={<Trophy size={20}/>} label="Leaderboard" /></Link>
+          <Link to="/history"><NavItem icon={<Calendar size={20}/>} label="History" /></Link>
+        </nav>
+        <div className="p-4 border-t border-white/10">
+          <button onClick={handleLogout} className="flex items-center gap-3 w-full p-3 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition">
+            <LogOut size={20} /> <span className="font-bold text-sm">Logout</span>
+          </button>
+        </div>
+      </aside>
+
+      {/* MAIN CONTENT */}
+      <main className="relative z-10 flex-1 md:ml-64 p-6 md:p-10 bg-slate-900">
+        <div className="fixed inset-0 pointer-events-none opacity-5 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-teal-500 via-slate-900 to-slate-900"></div>
+        
+        {/* Header */}
+        <header className="flex justify-between items-center mb-10 relative z-10">
+          <div>
+            <h1 className="text-3xl font-bold text-white drop-shadow-md">Welcome back, {displayName}</h1>
+            <div className="flex items-center gap-2 mt-2">
+               <span className="px-3 py-1 rounded-full bg-teal-500/10 text-teal-400 border border-teal-500/20 text-xs font-bold uppercase tracking-wider flex items-center gap-1">
+                 <Trophy size={12} /> Rank: {stats.level}
+               </span>
+               <p className="text-slate-400 text-sm">Let's crush today's goals.</p>
+            </div>
+          </div>
+          <Link to="/setup" className="w-12 h-12 rounded-full bg-gradient-to-br from-teal-400 to-emerald-500 flex items-center justify-center text-slate-900 font-black shadow-[0_0_20px_rgba(20,184,166,0.3)] hover:scale-110 transition">
+            {userInitial}
+          </Link>
+        </header>
+
+        {/* Stats Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-10 relative z-10">
+          <StatCard icon={<Flame className="text-orange-500" />} label="Streak" value={`${stats.streak} Days`} />
+          <StatCard icon={<Dumbbell className="text-blue-400" />} label="Workouts" value={`${stats.totalWorkouts || 0} Total`} />
+          
+          <div className="md:col-span-2 bg-slate-800/40 backdrop-blur-md border border-white/10 rounded-xl p-4 flex flex-col justify-between">
+             <div className="flex justify-between items-center mb-4">
+                <p className="text-slate-400 text-xs font-bold uppercase tracking-wider">Activity (Last 7 Days)</p>
+             </div>
+             <div className="h-24 w-full">
+               <ResponsiveContainer width="100%" height="100%">
+                 <BarChart data={stats.chartData || []}>
+                   <Tooltip 
+                     cursor={{fill: 'rgba(255,255,255,0.05)'}} 
+                     contentStyle={{background: '#0f172a', border: '1px solid #334155', borderRadius: '8px'}}
+                   />
+                   <Bar dataKey="workouts" radius={[4, 4, 0, 0]}>
+                     {(stats.chartData || []).map((entry, index) => (
+                       <Cell key={`cell-${index}`} fill={entry.workouts > 0 ? '#2dd4bf' : '#334155'} />
+                     ))}
+                   </Bar>
+                 </BarChart>
+               </ResponsiveContainer>
+             </div>
+          </div>
+        </div>
+
+        {/* Action Section */}
+        <div className="grid md:grid-cols-3 gap-8 relative z-10">
+          
+          <div className="md:col-span-2 bg-gradient-to-br from-slate-800 to-slate-900 border border-white/10 rounded-2xl p-8 relative overflow-hidden group hover:border-teal-500/30 transition-all">
+            <div className="absolute top-0 right-0 w-64 h-64 bg-teal-500/10 rounded-full blur-3xl -mr-16 -mt-16 pointer-events-none group-hover:bg-teal-500/20 transition duration-500"></div>
+            
+            <div className="relative z-10">
+              <div className="flex items-center gap-2 mb-4">
+                  <div className="px-3 py-1 bg-teal-500/20 text-teal-300 rounded-full text-xs font-bold uppercase tracking-wider border border-teal-500/20">
+                    <Zap size={14} /> AI Coach Ready
+                  </div>
+              </div>
+              
+              <h2 className="text-2xl font-bold mb-2 text-white">Initialize Training Protocol</h2>
+              <p className="text-slate-300 mb-8 max-w-md leading-relaxed">
+                  Your AI coach is ready to analyze your biometrics and generate a custom split.
+              </p>
+              
+              <div className="flex flex-wrap gap-4">
+                {/* --- GENERATE BUTTON --- */}
+                <button 
+                  onClick={handleGenerateWorkout}
+                  disabled={generating}
+                  className="inline-flex items-center gap-2 px-6 py-3 bg-teal-500 text-slate-900 font-bold rounded-lg hover:bg-teal-400 transition shadow-lg shadow-teal-500/20 transform hover:-translate-y-0.5 disabled:opacity-50"
+                >
+                  {generating ? (
+                    <>Building Plan <Loader className="w-5 h-5 animate-spin" /></>
+                  ) : (
+                    <>Generate Workout <ChevronRight size={20} /></>
+                  )}
+                </button>
+
+                 <Link to="/workout-plan" className="inline-flex items-center gap-2 px-6 py-3 bg-slate-800 text-teal-400 font-bold rounded-lg hover:bg-slate-700 transition border border-teal-500/30">
+                  View Current Plan
+                </Link>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-slate-800/60 backdrop-blur-md border border-white/10 rounded-2xl p-6">
+            <h3 className="font-bold text-slate-300 mb-4 uppercase text-xs tracking-wider">Quick Actions</h3>
+            <div className="space-y-3">
+              <Link to="/log">
+                <div className="w-full flex justify-between items-center p-4 bg-slate-900/40 border border-teal-500/20 rounded-lg hover:border-teal-500 hover:bg-teal-500/10 transition group cursor-pointer">
+                  <span className="text-sm font-bold text-teal-400">Log Completed Workout</span>
+                  <ChevronRight size={16} className="text-teal-500" />
+                </div>
+              </Link>
+              
+              {/* This link goes to /setup for EXISTING users to update stats */}
+              <Link to="/setup"><QuickAction label="Update Stats" /></Link>
+              
+              <Link to="/history"><QuickAction label="View History" /></Link>
+              
+              <Link to="/library"><QuickAction label="Exercise Library" /></Link>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+  );
+};
+
+const NavItem = ({ icon, label, active }) => (
+  <button className={`flex items-center gap-3 w-full p-3 rounded-lg transition ${active ? 'bg-teal-500/10 text-teal-400 border border-teal-500/20' : 'text-slate-400 hover:bg-white/5 hover:text-white border border-transparent'}`}>
+    {icon}
+    <span className="font-semibold text-sm">{label}</span>
+  </button>
+);
+
+const StatCard = ({ icon, label, value }) => (
+  <div className="bg-slate-800/40 border border-white/10 p-6 rounded-xl flex items-center gap-4 hover:border-teal-500/30 transition">
+    <div className="p-3 bg-slate-900 rounded-lg border border-white/5">{icon}</div>
+    <div>
+      <p className="text-slate-400 text-xs font-bold uppercase tracking-wider">{label}</p>
+      <p className="text-xl font-bold text-white">{value}</p>
+    </div>
+  </div>
+);
+
+const QuickAction = ({ label }) => (
+  <button className="w-full flex justify-between items-center p-4 bg-slate-900/40 border border-white/5 rounded-lg hover:border-teal-500/50 hover:bg-slate-800 transition group">
+    <span className="text-sm font-medium text-slate-300 group-hover:text-white">{label}</span>
+    <ChevronRight size={16} className="text-slate-600 group-hover:text-teal-400" />
+  </button>
+);
+
+export default Dashboard;
