@@ -1,24 +1,28 @@
-import React, { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
 import api from '../api';
+import toast from 'react-hot-toast';
 import { 
-  Utensils, ChevronLeft, RefreshCcw, Leaf, Flame, Droplets 
+  PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend 
+} from 'recharts';
+import { 
+  Utensils, RefreshCw, Leaf, Beef, 
+  ShoppingBag, Flame, Loader, AlertCircle 
 } from 'lucide-react';
 
 const Nutrition = () => {
-  const [plan, setPlan] = useState(null);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
-  const [activeDay, setActiveDay] = useState(0);
+  const [mealPlan, setMealPlan] = useState(null);
+  const [activeDay, setActiveDay] = useState(0); // 0 = Monday
 
   useEffect(() => {
-    fetchPlan();
+    fetchMealPlan();
   }, []);
 
-  const fetchPlan = async () => {
+  const fetchMealPlan = async () => {
     try {
       const res = await api.get('/ai/meal-plan');
-      setPlan(res.data.plan);
+      if (res.data) setMealPlan(res.data.plan);
     } catch (err) {
       console.log("No meal plan found");
     } finally {
@@ -26,117 +30,200 @@ const Nutrition = () => {
     }
   };
 
-// Inside Nutrition.jsx
+  const generateNewPlan = async () => {
+    setGenerating(true);
+    try {
+      const res = await api.post('/ai/generate-meal');
+      setMealPlan(res.data.plan);
+      toast.success("Chef AI has cooked up a new plan! 🍳");
+    } catch (err) {
+      toast.error("AI is busy. Try again in a moment.");
+    } finally {
+      setGenerating(false);
+    }
+  };
 
-const handleGenerate = async () => {
-  setGenerating(true);
-  try {
-    // This POST request triggers the backend fix above
-    const res = await api.post('/ai/generate-meal'); 
-    setPlan(res.data.plan); // This updates the UI immediately with the new diet
-    toast.success("Meal plan updated for your new diet!");
-  } catch (err) {
-    toast.error("Error generating new meal plan.");
-  } finally {
-    setGenerating(false);
-  }
-};
   if (loading) return (
     <div className="min-h-screen bg-slate-900 flex items-center justify-center text-teal-400">
-      <RefreshCcw className="w-10 h-10 animate-spin" />
+      <Loader className="animate-spin w-10 h-10" />
     </div>
   );
 
-  if (!plan) return (
-    <div className="min-h-screen bg-slate-900 text-white flex flex-col items-center justify-center p-6 text-center relative overflow-hidden">
-      <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1490645935967-10de6ba17061?q=80&w=1453&auto=format&fit=crop')] bg-cover bg-center opacity-20"></div>
-      <div className="absolute inset-0 bg-slate-900/80"></div>
-
-      <div className="relative z-10 max-w-lg">
-        <div className="w-20 h-20 bg-teal-500/20 rounded-full flex items-center justify-center mx-auto mb-6 border border-teal-500/30">
-          <Utensils className="w-10 h-10 text-teal-400" />
-        </div>
-        <h2 className="text-3xl font-bold mb-4">Fuel Your Gains</h2>
-        <p className="text-slate-400 mb-8 text-lg">
-          Your AI nutritionist is ready to build a 7-day meal plan based on your current diet preferences and calorie needs.
-        </p>
-        
-        <button 
-          onClick={handleGenerate} 
-          disabled={generating}
-          className="px-8 py-4 bg-teal-500 text-slate-900 font-bold rounded-xl hover:bg-teal-400 transition shadow-xl shadow-teal-500/20 flex items-center gap-3 mx-auto disabled:opacity-50"
-        >
-          {generating ? (
-            <>Thinking... <RefreshCcw className="animate-spin" /></>
-          ) : (
-            <>Generate Meal Plan <Utensils size={20} /></>
-          )}
-        </button>
-        
-        <div className="mt-6">
-          <Link to="/dashboard" className="text-slate-500 hover:text-white transition">Back to Dashboard</Link>
+  // --- VIEW: EMPTY STATE (No Plan) ---
+  if (!mealPlan) {
+    return (
+      <div className="min-h-screen bg-slate-900 text-white p-6 flex items-center justify-center relative overflow-hidden">
+         {/* Background Image */}
+         <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1490645935967-10de6ba17061?q=80&w=1453&auto=format&fit=crop')] bg-cover bg-center opacity-10"></div>
+         
+         <div className="max-w-md text-center relative z-10">
+          <div className="w-20 h-20 bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-6 border border-white/10 shadow-xl shadow-teal-500/10">
+            <Utensils size={32} className="text-teal-400" />
+          </div>
+          <h1 className="text-3xl font-black italic uppercase mb-4">Fuel Your <span className="text-teal-400">Gains</span></h1>
+          <p className="text-slate-400 mb-8">
+            Nutrition is 70% of the battle. Let our AI Nutritionist build a custom 7-day meal plan based on your goal and dietary preferences.
+          </p>
+          <button 
+            onClick={generateNewPlan}
+            disabled={generating}
+            className="w-full py-4 bg-teal-500 hover:bg-teal-400 text-slate-900 font-bold uppercase tracking-wider rounded-xl shadow-lg shadow-teal-500/20 transition flex items-center justify-center gap-2"
+          >
+            {generating ? <Loader className="animate-spin" /> : <RefreshCw />}
+            Generate Meal Plan
+          </button>
         </div>
       </div>
-    </div>
-  );
+    );
+  }
 
-  const schedule = plan.schedule; 
-  const currentDay = schedule[activeDay];
-  const macros = plan.macros;
+  // --- DATA PREP FOR CHARTS ---
+  const macros = mealPlan.macros || { protein: '0g', carbs: '0g', fats: '0g', calories: 0 };
+  
+  // Helper to convert "180g" string to number 180
+  const parseMacro = (str) => parseInt(str?.replace('g', '')) || 0;
+  
+  const macroData = [
+    { name: 'Protein', value: parseMacro(macros.protein), color: '#2dd4bf' }, // Teal
+    { name: 'Carbs', value: parseMacro(macros.carbs), color: '#fb923c' },   // Orange
+    { name: 'Fats', value: parseMacro(macros.fats), color: '#facc15' },     // Yellow
+  ];
+
+  const schedule = mealPlan.schedule || [];
+  const currentDayPlan = schedule[activeDay] || {};
 
   return (
-    <div className="min-h-screen bg-slate-900 text-white font-sans flex flex-col md:flex-row overflow-hidden">
-      <div className="w-full md:w-80 bg-slate-950 border-r border-white/10 flex flex-col h-auto md:h-screen overflow-y-auto">
-        <div className="p-6 border-b border-white/10 flex items-center gap-4">
-          <Link to="/dashboard" className="p-2 hover:bg-white/10 rounded-full transition">
-            <ChevronLeft size={20} />
-          </Link>
-          <span className="font-bold tracking-wider uppercase text-sm text-slate-400">Meal Schedule</span>
-        </div>
-        <div className="flex-1 p-4 space-y-2">
-          {schedule.map((day, index) => (
-            <button
-              key={index}
-              onClick={() => setActiveDay(index)}
-              className={`w-full text-left p-4 rounded-xl transition-all border ${
-                activeDay === index 
-                  ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-400 shadow-lg shadow-emerald-900/20' 
-                  : 'bg-slate-900/50 border-white/5 text-slate-400 hover:bg-slate-800 hover:text-white'
-              }`}
-            >
-              <span className="font-bold text-sm">{day.day}</span>
-            </button>
-          ))}
-        </div>
-      </div>
+    <div className="min-h-screen bg-slate-900 text-white font-sans p-6 md:p-10 relative overflow-hidden">
+      {/* Background FX */}
+      <div className="fixed inset-0 pointer-events-none bg-[radial-gradient(circle_at_top_right,_var(--tw-gradient-stops))] from-teal-900/20 via-slate-900 to-slate-900"></div>
 
-      <div className="flex-1 h-screen overflow-y-auto bg-slate-900 relative">
-        <div className="fixed inset-0 pointer-events-none opacity-5 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-emerald-500 via-slate-900 to-slate-900"></div>
+      <div className="relative z-10 max-w-6xl mx-auto">
+        
+        {/* HEADER */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-10">
+          <div>
+            <div className="flex items-center gap-2 text-teal-400 mb-1">
+              <Utensils size={18} />
+              <span className="text-xs font-bold uppercase tracking-wider">AI Nutrition Protocol</span>
+            </div>
+            <h1 className="text-3xl font-black italic uppercase">Kitchen <span className="text-transparent bg-clip-text bg-gradient-to-r from-teal-400 to-emerald-400">Intelligence</span></h1>
+          </div>
+          <button 
+            onClick={generateNewPlan}
+            disabled={generating}
+            className="flex items-center gap-2 px-5 py-2.5 bg-slate-800 border border-white/10 hover:border-teal-500/50 rounded-lg text-sm font-bold transition text-slate-300 hover:text-white"
+          >
+            {generating ? <Loader size={16} className="animate-spin" /> : <RefreshCw size={16} />}
+            Regenerate Plan
+          </button>
+        </div>
 
-        <div className="max-w-4xl mx-auto p-6 md:p-12 relative z-10">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           
-          <div className="mb-10 grid grid-cols-2 md:grid-cols-4 gap-4">
-            <MacroCard icon={<Flame className="text-orange-500" />} label="Calories" value={macros.calories} />
-            <MacroCard icon={<Leaf className="text-blue-400" />} label="Protein" value={macros.protein} />
-            <MacroCard icon={<Leaf className="text-emerald-400" />} label="Carbs" value={macros.carbs} />
-            <MacroCard icon={<Droplets className="text-yellow-400" />} label="Fats" value={macros.fats} />
+          {/* LEFT: MACRO BREAKDOWN (The Pro Feature) */}
+          <div className="lg:col-span-1 space-y-6">
+            
+            {/* 1. PIE CHART CARD */}
+            <div className="bg-slate-800/40 border border-white/5 rounded-3xl p-6 backdrop-blur-sm">
+              <h3 className="font-bold text-slate-300 mb-6 flex items-center gap-2">
+                <Flame className="text-orange-500" size={20} /> Daily Targets
+              </h3>
+              
+              <div className="h-48 w-full relative">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={macroData}
+                      innerRadius={60}
+                      outerRadius={80}
+                      paddingAngle={5}
+                      dataKey="value"
+                      stroke="none"
+                    >
+                      {macroData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip 
+                      contentStyle={{ backgroundColor: '#0f172a', border: 'none', borderRadius: '8px', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.5)' }}
+                      itemStyle={{ fontWeight: 'bold' }}
+                    />
+                    <Legend verticalAlign="bottom" height={36} iconType="circle" />
+                  </PieChart>
+                </ResponsiveContainer>
+                
+                {/* Center Text Overlay */}
+                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none pb-8">
+                  <span className="text-2xl font-black text-white">{macros.calories}</span>
+                  <span className="text-[10px] uppercase font-bold text-slate-500">Kcal</span>
+                </div>
+              </div>
+
+              {/* Stats Grid */}
+              <div className="grid grid-cols-3 gap-2 mt-4">
+                <MacroStat label="Protein" value={macros.protein} color="text-teal-400" />
+                <MacroStat label="Carbs" value={macros.carbs} color="text-orange-400" />
+                <MacroStat label="Fats" value={macros.fats} color="text-yellow-400" />
+              </div>
+            </div>
+
+            {/* 2. SHOPPING TIP */}
+            <div className="bg-teal-500/10 border border-teal-500/20 rounded-2xl p-5 flex gap-4 items-start">
+              <ShoppingBag className="text-teal-400 shrink-0" />
+              <div>
+                <h4 className="font-bold text-teal-400 text-sm mb-1">Shopping List Tip</h4>
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  Stick to the outer aisles of the grocery store. That's where the fresh protein and produce live. Processed food is in the middle!
+                </p>
+              </div>
+            </div>
           </div>
 
-          <h1 className="text-3xl font-black italic text-white mb-8 flex items-center gap-3">
-             <Utensils className="text-emerald-400" /> {currentDay.day}'s Menu
-          </h1>
+          {/* RIGHT: MEAL SCHEDULE */}
+          <div className="lg:col-span-2">
+            
+            {/* Day Selector (Horizontal Scroll) */}
+            <div className="flex overflow-x-auto pb-4 gap-3 mb-4 custom-scrollbar">
+              {schedule.map((day, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => setActiveDay(idx)}
+                  className={`flex-shrink-0 px-5 py-3 rounded-xl font-bold text-sm transition border whitespace-nowrap ${
+                    activeDay === idx 
+                      ? 'bg-teal-500 text-slate-900 border-teal-500 shadow-lg shadow-teal-500/20' 
+                      : 'bg-slate-800 text-slate-400 border-white/5 hover:border-white/20'
+                  }`}
+                >
+                  {day.day}
+                </button>
+              ))}
+            </div>
 
-          <div className="space-y-6">
-            <MealCard title="Breakfast" food={currentDay.meals.breakfast} />
-            <MealCard title="Lunch" food={currentDay.meals.lunch} />
-            <MealCard title="Snack" food={currentDay.meals.snack} />
-            <MealCard title="Dinner" food={currentDay.meals.dinner} />
-          </div>
+            {/* Meal Cards */}
+            <div className="space-y-4">
+              {currentDayPlan.meals ? (
+                Object.entries(currentDayPlan.meals).map(([type, food], idx) => (
+                  <div key={idx} className="group bg-slate-800/60 border border-white/5 hover:border-teal-500/30 rounded-2xl p-6 transition-all flex gap-5 items-center">
+                    <div className="w-12 h-12 rounded-full bg-slate-900 flex items-center justify-center border border-white/10 group-hover:scale-110 transition shrink-0">
+                      {type === 'breakfast' && <Leaf size={20} className="text-green-400" />}
+                      {type === 'lunch' && <Beef size={20} className="text-red-400" />}
+                      {type === 'dinner' && <Utensils size={20} className="text-teal-400" />}
+                      {type === 'snack' && <Leaf size={20} className="text-yellow-400" />}
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">{type}</h4>
+                      <p className="text-lg font-medium text-white">{food}</p>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="p-8 text-center border border-dashed border-slate-700 rounded-2xl">
+                   <AlertCircle className="w-8 h-8 text-slate-600 mx-auto mb-2" />
+                   <p className="text-slate-500">Select a day to view the menu.</p>
+                </div>
+              )}
+            </div>
 
-          <div className="mt-12 text-center">
-             <button onClick={handleGenerate} className="text-xs text-slate-500 hover:text-emerald-400 flex items-center justify-center gap-2 mx-auto">
-               <RefreshCcw size={12} /> Regenerate Plan (Using Updated Stats)
-             </button>
           </div>
         </div>
       </div>
@@ -144,20 +231,11 @@ const handleGenerate = async () => {
   );
 };
 
-const MacroCard = ({ icon, label, value }) => (
-  <div className="bg-slate-800/60 border border-white/10 p-4 rounded-xl flex items-center gap-3">
-    <div className="p-2 bg-slate-900 rounded-lg">{icon}</div>
-    <div>
-      <p className="text-slate-400 text-xs font-bold uppercase">{label}</p>
-      <p className="text-lg font-bold text-white">{value}</p>
-    </div>
-  </div>
-);
-
-const MealCard = ({ title, food }) => (
-  <div className="bg-slate-800/40 border border-white/10 rounded-2xl p-6 hover:border-emerald-500/30 transition">
-    <h3 className="text-emerald-400 font-bold uppercase tracking-wider text-xs mb-2">{title}</h3>
-    <p className="text-white text-lg font-medium leading-relaxed">{food}</p>
+// Simple sub-component for Macro Grid
+const MacroStat = ({ label, value, color }) => (
+  <div className="text-center p-3 bg-slate-900/50 rounded-xl border border-white/5">
+    <p className={`text-sm font-black ${color}`}>{value}</p>
+    <p className="text-[10px] text-slate-500 uppercase font-bold">{label}</p>
   </div>
 );
 

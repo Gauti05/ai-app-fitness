@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { 
   Activity, Zap, Brain, ChevronRight, ScanLine, Dumbbell, Play, 
-  User, Cpu, Target, Clock, Heart, Battery 
+  User, Cpu, Target, Heart, Battery 
 } from 'lucide-react';
 
 const Landing = () => {
@@ -11,13 +11,12 @@ const Landing = () => {
     <div className="relative min-h-screen font-sans text-white selection:bg-cyan-400 selection:text-black overflow-x-hidden bg-slate-900">
       
       {/* ================= BACKGROUND LAYERS ================= */}
-      
       <div 
         className="fixed inset-0 z-0 bg-cover bg-center bg-no-repeat"
         style={{ backgroundImage: "url('https://images.unsplash.com/photo-1534438327276-14e5300c3a48?q=80&w=1470&auto=format&fit=crop')" }}
       ></div>
-      <div className="fixed inset-0 z-0 bg-gradient-to-b from-slate-950/90 via-slate-900/40 to-slate-950/90"></div>
-      <div className="fixed inset-0 z-0 bg-blue-500/10 mix-blend-overlay pointer-events-none"></div>
+      <div className="fixed inset-0 z-0 bg-gradient-to-b from-slate-950/90 via-slate-900/60 to-slate-950/90"></div>
+      <div className="fixed inset-0 z-0 bg-cyan-500/5 mix-blend-overlay pointer-events-none"></div>
 
       {/* ================= CONTENT ================= */}
 
@@ -57,7 +56,7 @@ const Landing = () => {
               <span className="absolute inline-flex w-full h-full rounded-full opacity-75 animate-ping bg-cyan-400"></span>
               <span className="relative inline-flex w-2 h-2 rounded-full bg-cyan-500"></span>
             </span>
-            <span className="text-xs font-mono font-bold text-cyan-300 tracking-widest uppercase">AI Beta Live</span>
+            <span className="text-xs font-mono font-bold text-cyan-300 tracking-widest uppercase">AI Model v2.0 Live</span>
           </div>
 
           <h1 className="mb-6 text-6xl font-black leading-none text-white md:text-8xl drop-shadow-xl italic">
@@ -86,7 +85,7 @@ const Landing = () => {
           </div>
         </motion.div>
 
-        {/* RIGHT: THE HUD (UPDATED LAYOUT - WIDGETS ON TOP) */}
+        {/* RIGHT: THE HUD (UPDATED WITH BODY MAP) */}
         <motion.div 
           initial={{ opacity: 0, x: 50 }}
           animate={{ opacity: 1, x: 0 }}
@@ -94,12 +93,12 @@ const Landing = () => {
           className="relative max-w-md mx-auto w-full flex flex-col gap-4"
         >
 
-          {/* ================= SECTION 1: WIDGETS (NOW ON TOP) ================= */}
+          {/* ================= SECTION 1: WIDGETS ================= */}
           <div className="grid grid-cols-2 gap-4">
             
-            {/* BOX 2: HEART RATE MONITOR */}
+            {/* BOX 2: HEART RATE */}
             <div className="relative p-1 bg-gradient-to-br from-white/10 to-transparent rounded-xl backdrop-blur-md">
-                <div className="bg-black/90 rounded-lg border border-white/10 p-4 h-full">
+                <div className="bg-black/80 rounded-lg border border-white/10 p-4 h-full">
                     <div className="flex items-center justify-between mb-3">
                         <span className="text-[10px] font-mono tracking-wider text-slate-400">HEART RATE</span>
                         <Heart className="w-3 h-3 text-red-500 animate-pulse" />
@@ -116,9 +115,9 @@ const Landing = () => {
                 </div>
             </div>
 
-            {/* BOX 3: RECOVERY GAUGE */}
+            {/* BOX 3: RECOVERY */}
             <div className="relative p-1 bg-gradient-to-br from-white/10 to-transparent rounded-xl backdrop-blur-md">
-                <div className="bg-black/90 rounded-lg border border-white/10 p-4 h-full flex flex-col justify-between">
+                <div className="bg-black/80 rounded-lg border border-white/10 p-4 h-full flex flex-col justify-between">
                     <div className="flex items-center justify-between mb-2">
                         <span className="text-[10px] font-mono tracking-wider text-slate-400">RECOVERY</span>
                         <Battery className="w-3 h-3 text-green-400" />
@@ -141,7 +140,7 @@ const Landing = () => {
 
           </div>
 
-          {/* ================= SECTION 2: MAIN SCANNER (NOW BELOW) ================= */}
+          {/* ================= SECTION 2: MUSCLE HEATMAP VISUALIZER ================= */}
           <div className="relative p-1 bg-gradient-to-br from-white/20 to-transparent rounded-2xl backdrop-blur-md shadow-2xl">
             <div className="bg-black/90 rounded-xl border border-white/10 p-5 overflow-hidden relative">
               
@@ -149,27 +148,49 @@ const Landing = () => {
               <motion.div 
                 animate={{ top: ['0%', '100%', '0%'] }}
                 transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
-                className="absolute left-0 w-full h-[2px] bg-cyan-400 shadow-[0_0_15px_#22d3ee] z-20 opacity-80"
+                className="absolute left-0 w-full h-[2px] bg-cyan-400 shadow-[0_0_15px_#22d3ee] z-20 opacity-40 pointer-events-none"
               />
 
               {/* Header */}
               <div className="flex justify-between items-center mb-4 border-b border-white/10 pb-3">
                  <div className="flex items-center gap-2 text-cyan-400">
                     <ScanLine className="w-4 h-4" />
-                    <span className="font-mono text-xs font-bold tracking-widest">BIO_SCAN.EXE</span>
+                    <span className="font-mono text-xs font-bold tracking-widest">BODY_SCAN.AI</span>
                  </div>
-                 <div className="flex gap-1">
-                    <div className="w-1.5 h-1.5 rounded-full bg-red-500"></div>
-                    <div className="w-1.5 h-1.5 rounded-full bg-yellow-500"></div>
-                    <div className="w-1.5 h-1.5 rounded-full bg-green-500"></div>
+                 <div className="flex gap-2 text-[8px] font-mono text-slate-500">
+                   <span className="text-red-500">FATIGUE</span> / <span className="text-slate-300">FRESH</span>
                  </div>
               </div>
 
-              {/* Data Rows (Compact) */}
-              <div className="space-y-3 mb-4">
-                <ScannerRow icon={<User className="w-3.5 h-3.5 text-cyan-500" />} label="USER" value="ALEX_ACTIVE" delay={1} />
-                <ScannerRow icon={<Cpu className="w-3.5 h-3.5 text-cyan-500" />} label="TYPE" value="MESOMORPH" delay={2} highlight />
-                <ScannerRow icon={<Target className="w-3.5 h-3.5 text-cyan-500" />} label="GOAL" value="MUSCLE GAIN" delay={3} />
+              {/* BODY MAP VISUAL */}
+              <div className="flex items-center justify-between gap-4">
+                
+                {/* SVG Body Map (Simplified for Landing) */}
+                <div className="h-32 w-1/3 flex justify-center relative">
+                   <svg viewBox="0 0 200 400" className="h-full drop-shadow-[0_0_10px_rgba(34,211,238,0.3)]">
+                      <path d="M70,60 Q100,90 130,60 L130,100 Q100,120 70,100 Z" fill="#ef4444" opacity="0.8" /> {/* Chest - Red */}
+                      <rect x="80" y="105" width="40" height="60" rx="5" fill="#334155" /> {/* Abs */}
+                      <circle cx="60" cy="65" r="15" fill="#f97316" /> {/* Shoulders - Orange */}
+                      <circle cx="140" cy="65" r="15" fill="#f97316" />
+                      <rect x="45" y="80" width="15" height="40" rx="5" fill="#334155" /> {/* Arms */}
+                      <rect x="140" y="80" width="15" height="40" rx="5" fill="#334155" />
+                      <path d="M75,170 L100,170 L100,260 L80,260 Z" fill="#334155" /> {/* Legs */}
+                      <path d="M125,170 L100,170 L100,260 L120,260 Z" fill="#334155" />
+                   </svg>
+                   {/* Scanning Circle Overlay */}
+                   <motion.div 
+                     animate={{ y: [0, 80, 0] }}
+                     transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
+                     className="absolute w-full h-1 bg-cyan-400 blur-sm opacity-50"
+                   />
+                </div>
+
+                {/* Data Readout */}
+                <div className="w-2/3 space-y-3">
+                  <ScannerRow icon={<User className="w-3.5 h-3.5 text-cyan-500" />} label="TARGET" value="CHEST & DELTS" delay={1} />
+                  <ScannerRow icon={<Cpu className="w-3.5 h-3.5 text-cyan-500" />} label="STATUS" value="RECOVERY REQ." delay={2} highlight />
+                  <ScannerRow icon={<Target className="w-3.5 h-3.5 text-cyan-500" />} label="NEXT" value="LEGS (OPT)" delay={3} />
+                </div>
               </div>
 
               {/* Result Badge */}
@@ -177,11 +198,11 @@ const Landing = () => {
                 initial={{ scale: 0.8, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 transition={{ delay: 4.5, type: "spring" }}
-                className="p-3 bg-cyan-900/40 border border-cyan-500/30 rounded-lg flex items-center justify-center gap-3 relative overflow-hidden group"
+                className="mt-4 p-2 bg-cyan-900/40 border border-cyan-500/30 rounded-lg flex items-center justify-center gap-3 relative overflow-hidden group"
               >
                 <div className="absolute inset-0 bg-cyan-400/10 group-hover:bg-cyan-400/20 transition-colors"></div>
-                <Activity className="w-4 h-4 text-cyan-400 animate-pulse relative z-10" />
-                <span className="text-white font-bold tracking-wide text-xs relative z-10">PLAN GENERATED</span>
+                <Activity className="w-3 h-3 text-cyan-400 animate-pulse relative z-10" />
+                <span className="text-white font-bold tracking-wide text-[10px] relative z-10">WORKOUT ADAPTED</span>
               </motion.div>
 
             </div>
@@ -190,8 +211,7 @@ const Landing = () => {
         </motion.div>
       </div>
 
-      {/* --- FEATURES STRIP (SIZE REDUCED) --- */}
-      {/* Changed py-16 to py-8 and gap-8 to gap-6 for a more compact look */}
+      {/* --- FEATURES STRIP --- */}
       <div className="relative z-10 bg-black/80 backdrop-blur-xl border-t border-white/10">
         <div className="max-w-7xl mx-auto px-6 py-8 grid md:grid-cols-3 gap-6">
             <Feature 
@@ -206,8 +226,8 @@ const Landing = () => {
             />
             <Feature 
               icon={<Activity className="w-8 h-8 text-purple-400" />}
-              title="SMART ANALYTICS"
-              desc="Visualize your progressive overload with industrial-grade charts."
+              title="MUSCLE HEATMAP"
+              desc="Visualize your progressive overload with our 3D recovery tracking system."
             />
         </div>
       </div>

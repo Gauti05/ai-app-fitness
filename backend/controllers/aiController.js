@@ -1,4 +1,5 @@
 const { GoogleGenerativeAI } = require("@google/generative-ai");
+const User = require('../models/User'); // Context for Name
 const Profile = require('../models/Profile');
 const Workout = require('../models/Workout');
 const MealPlan = require('../models/MealPlan');
@@ -12,7 +13,6 @@ const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 // --- ROBUST BACKUP DATA (The Fail-Safe) ---
 const FALLBACK_EXERCISES = {
-  // Squat variations
   "squat": {
     name: "Squat",
     targetMuscles: ["Quads", "Glutes", "Hamstrings"],
@@ -27,8 +27,6 @@ const FALLBACK_EXERCISES = {
     commonMistakes: ["Knees caving in", "Heels lifting", "Not deep enough"],
     difficulty: "Intermediate"
   },
-  
-  // Deadlift variations
   "deadlift": {
     name: "Deadlift",
     targetMuscles: ["Hamstrings", "Glutes", "Back"],
@@ -43,8 +41,6 @@ const FALLBACK_EXERCISES = {
     commonMistakes: ["Rounding back", "Jerking the bar", "Squatting the weight"],
     difficulty: "Advanced"
   },
-
-  // Bench variations
   "bench press": {
     name: "Bench Press",
     targetMuscles: ["Chest", "Triceps", "Front Delts"],
@@ -80,6 +76,7 @@ exports.generateWorkout = async (req, res) => {
       - Structure: { "schedule": [ { "day": "Monday", "focus": "Push", "exercises": [ { "name": "Bench Press", "sets": "3", "reps": "8-12", "notes": "Focus on form" } ] } ] }
     `;
 
+    // KEPT ORIGINAL MODEL
     const model = genAI.getGenerativeModel({ model: "gemini-flash-latest" });
     
     // --- RETRY LOGIC ---
@@ -157,6 +154,7 @@ exports.generateMealPlan = async (req, res) => {
         }
     `;
 
+    // KEPT ORIGINAL MODEL
     const model = genAI.getGenerativeModel({ model: "gemini-flash-latest" });
     
     // --- RETRY LOGIC ---
@@ -247,6 +245,7 @@ exports.explainExercise = async (req, res) => {
       }
     `;
 
+    // KEPT ORIGINAL MODEL
     const model = genAI.getGenerativeModel({ model: "gemini-flash-latest" });
     
     let retries = 2; // Reduced retries so we can fallback faster
@@ -300,24 +299,47 @@ exports.explainExercise = async (req, res) => {
   }
 };
 
-// @desc    Chat with AI Coach (WITH RETRY)
+// @desc    Chat with AI Coach (SMART CONTEXT VERSION)
 // @route   POST /api/ai/chat
 exports.chatWithCoach = async (req, res) => {
   const { message } = req.body;
 
   try {
+    // 1. Fetch User Context (Profile & Current Plan)
+    const user = await User.findById(req.user.id);
     const profile = await Profile.findOne({ user: req.user.id });
-    const context = profile 
-      ? `User: ${profile.age}yo, ${profile.weight}kg, Goal: ${profile.goal}.` 
-      : "User profile not set.";
+    const latestWorkout = await Workout.findOne({ user: req.user.id }).sort({ createdAt: -1 });
 
-    const model = genAI.getGenerativeModel({ model: "gemini-flash-latest" });
-
-    const prompt = `
-      System: You are 'Trainer AI'. Context: ${context}
-      User Question: ${message}
-      Requirement: Keep answer under 50 words.
+    // 2. Build the "System Prompt"
+    let contextPrompt = `
+      You are an elite personal trainer AI named "TrainerAI".
+      
+      USER CONTEXT:
+      - Name: ${user.name}
+      - Age: ${profile?.age || '?'}
+      - Goal: ${profile?.goal || 'General Fitness'}
+      - Experience: ${profile?.activityLevel || 'Beginner'}
+      - Injuries/Limits: ${profile?.injuries && profile.injuries.length > 0 ? profile.injuries.join(", ") : "None"}
     `;
+
+    if (latestWorkout && latestWorkout.plan) {
+      // Add a summary of their current split
+      contextPrompt += `
+      - Current Plan available in system. 
+      `;
+    }
+
+    contextPrompt += `
+      INSTRUCTIONS:
+      - Answer the user's question specifically based on their goal of "${profile?.goal}".
+      - Keep answers concise (under 80 words), motivating, and actionable.
+      - If they ask about their plan, refer to their specific workouts.
+      
+      USER QUESTION: "${message}"
+    `;
+
+    // KEPT ORIGINAL MODEL
+    const model = genAI.getGenerativeModel({ model: "gemini-flash-latest" });
 
     // --- RETRY LOGIC ---
     let retries = 3;
@@ -325,7 +347,7 @@ exports.chatWithCoach = async (req, res) => {
     
     while (retries > 0) {
       try {
-        result = await model.generateContent(prompt);
+        result = await model.generateContent(contextPrompt);
         break; 
       } catch (err) {
         if (err.status === 429 && retries > 1) {

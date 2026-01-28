@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import api from '../api';
 import { 
   Activity, Ruler, Weight, Target, ChevronRight, 
-  User, Utensils, Loader, Save
+  User, Utensils, Loader, Save, AlertCircle
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -21,6 +21,7 @@ const Setup = () => {
     activityLevel: 'Moderately Active',
     dietaryPreference: 'Non-Vegetarian',
     equipment: 'Gym',
+    injuries: '', // Added state for injuries
   });
 
   // 1. FETCH CURRENT STATS ON MOUNT
@@ -39,6 +40,8 @@ const Setup = () => {
             activityLevel: res.data.activityLevel || 'Moderately Active',
             dietaryPreference: res.data.dietaryPreference || 'Non-Vegetarian',
             equipment: res.data.equipment || 'Gym',
+            // Convert array to comma-separated string for display
+            injuries: res.data.injuries ? res.data.injuries.join(', ') : '', 
           });
         }
       } catch (err) {
@@ -58,7 +61,15 @@ const Setup = () => {
     e.preventDefault();
     setSubmitting(true);
     try {
-      await api.post('/profile', formData); // Backend handles update automatically
+      // Create payload: Convert injuries string back to array for Backend/AI
+      const payload = {
+        ...formData,
+        injuries: formData.injuries 
+          ? formData.injuries.split(',').map(i => i.trim()).filter(i => i) 
+          : []
+      };
+
+      await api.post('/profile', payload); 
       toast.success("Stats Updated Successfully!");
       navigate('/dashboard');
     } catch (err) {
@@ -198,6 +209,21 @@ const Setup = () => {
                 <option value="Gym">Full Commercial Gym</option>
                 <option value="Home">Home (Dumbbells/Bands)</option>
               </select>
+            </div>
+
+            {/* NEW ROW: Injuries */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-red-400 uppercase tracking-wider flex items-center gap-1">
+                <AlertCircle size={12} /> Injuries / Limitations
+              </label>
+              <input 
+                type="text" 
+                name="injuries" 
+                value={formData.injuries} 
+                onChange={handleChange} 
+                className="w-full bg-slate-950/50 border border-slate-700 rounded-lg py-3 px-4 text-white focus:border-red-400/50 outline-none transition placeholder-slate-600" 
+                placeholder="e.g. Knee pain, Lower back issue (Leave empty if none)" 
+              />
             </div>
 
             <button 

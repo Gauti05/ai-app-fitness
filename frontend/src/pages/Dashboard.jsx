@@ -9,6 +9,8 @@ import {
   LayoutDashboard, Dumbbell, Utensils, LogOut, 
   Calendar, Flame, ChevronRight, Zap, Loader, Trophy
 } from 'lucide-react';
+// --- IMPORT THE NEW HEATMAP COMPONENT ---
+import MuscleHeatmap from '../components/MuscleHeatmap';
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -143,7 +145,7 @@ const Dashboard = () => {
         </header>
 
         {/* Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-10 relative z-10">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6 relative z-10">
           <StatCard icon={<Flame className="text-orange-500" />} label="Streak" value={`${stats.streak} Days`} />
           <StatCard icon={<Dumbbell className="text-blue-400" />} label="Workouts" value={`${stats.totalWorkouts || 0} Total`} />
           
@@ -167,6 +169,11 @@ const Dashboard = () => {
                </ResponsiveContainer>
              </div>
           </div>
+        </div>
+
+        {/* --- NEW SECTION: MUSCLE RECOVERY HEATMAP --- */}
+        <div className="mb-10 relative z-10">
+          <MuscleHeatmap />
         </div>
 
         {/* Action Section */}

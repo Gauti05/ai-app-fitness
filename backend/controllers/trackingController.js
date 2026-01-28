@@ -159,11 +159,12 @@ exports.getLeaderboard = async (req, res) => {
 exports.getHistory = async (req, res) => {
   try {
     const logs = await WorkoutLog.find({ user: req.user.id })
-      .sort({ date: -1 }); // Newest first
-
+      .sort({ date: -1 }) // Newest first
+      .limit(50); // Limit to last 50 workouts for performance
+      
     res.json(logs);
   } catch (err) {
-    console.error(err.message);
+    console.error(err);
     res.status(500).send('Server Error');
   }
 };
