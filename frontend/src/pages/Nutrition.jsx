@@ -5,15 +5,24 @@ import {
   PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend 
 } from 'recharts';
 import { 
-  Utensils, RefreshCw, Leaf, Beef, 
-  ShoppingBag, Flame, Loader, AlertCircle 
+  Utensils, RefreshCw, Leaf, Beef, X,
+  ShoppingBag, Flame, Loader, AlertCircle, HeartPulse, Check
 } from 'lucide-react';
 
 const Nutrition = () => {
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [mealPlan, setMealPlan] = useState(null);
-  const [activeDay, setActiveDay] = useState(0); // 0 = Monday
+  const [activeDay, setActiveDay] = useState(0); 
+
+  // --- HEALTH MODAL STATE ---
+  const [showHealthModal, setShowHealthModal] = useState(false);
+  const [selectedConditions, setSelectedConditions] = useState([]);
+
+  const conditionsList = [
+    "Diabetes (Type 2)", "PCOD / PCOS", "Hypertension (High BP)", 
+    "Thyroid (Hypo)", "High Cholesterol", "Gluten Intolerance"
+  ];
 
   useEffect(() => {
     fetchMealPlan();
@@ -30,12 +39,26 @@ const Nutrition = () => {
     }
   };
 
+  const toggleCondition = (condition) => {
+    if (selectedConditions.includes(condition)) {
+      setSelectedConditions(prev => prev.filter(c => c !== condition));
+    } else {
+      setSelectedConditions(prev => [...prev, condition]);
+    }
+  };
+
   const generateNewPlan = async () => {
     setGenerating(true);
+    setShowHealthModal(false); // Close modal
+    
     try {
-      const res = await api.post('/ai/generate-meal');
+      // Send selected conditions to backend
+      const res = await api.post('/ai/generate-meal', {
+        healthConditions: selectedConditions
+      });
+      
       setMealPlan(res.data.plan);
-      toast.success("Chef AI has cooked up a new plan! 🍳");
+      toast.success("Health-Smart Plan Generated! 🥗");
     } catch (err) {
       toast.error("AI is busy. Try again in a moment.");
     } finally {
@@ -49,23 +72,21 @@ const Nutrition = () => {
     </div>
   );
 
-  // --- VIEW: EMPTY STATE (No Plan) ---
+  // --- VIEW: EMPTY STATE ---
   if (!mealPlan) {
     return (
       <div className="min-h-screen bg-slate-900 text-white p-6 flex items-center justify-center relative overflow-hidden">
-         {/* Background Image */}
          <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1490645935967-10de6ba17061?q=80&w=1453&auto=format&fit=crop')] bg-cover bg-center opacity-10"></div>
-         
          <div className="max-w-md text-center relative z-10">
           <div className="w-20 h-20 bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-6 border border-white/10 shadow-xl shadow-teal-500/10">
             <Utensils size={32} className="text-teal-400" />
           </div>
-          <h1 className="text-3xl font-black italic uppercase mb-4">Fuel Your <span className="text-teal-400">Gains</span></h1>
+          <h1 className="text-3xl font-black italic uppercase mb-4">Fuel Your <span className="text-teal-400">Body</span></h1>
           <p className="text-slate-400 mb-8">
-            Nutrition is 70% of the battle. Let our AI Nutritionist build a custom 7-day meal plan based on your goal and dietary preferences.
+            Nutrition is 70% of the battle. Let our AI build a medical-grade meal plan tailored to your health needs.
           </p>
           <button 
-            onClick={generateNewPlan}
+            onClick={() => setShowHealthModal(true)} // Open Modal First
             disabled={generating}
             className="w-full py-4 bg-teal-500 hover:bg-teal-400 text-slate-900 font-bold uppercase tracking-wider rounded-xl shadow-lg shadow-teal-500/20 transition flex items-center justify-center gap-2"
           >
@@ -73,20 +94,20 @@ const Nutrition = () => {
             Generate Meal Plan
           </button>
         </div>
+        
+        {/* Render Modal if needed */}
+        {showHealthModal && <HealthModal onClose={() => setShowHealthModal(false)} onConfirm={generateNewPlan} conditions={conditionsList} selected={selectedConditions} toggle={toggleCondition} />}
       </div>
     );
   }
 
   // --- DATA PREP FOR CHARTS ---
   const macros = mealPlan.macros || { protein: '0g', carbs: '0g', fats: '0g', calories: 0 };
-  
-  // Helper to convert "180g" string to number 180
   const parseMacro = (str) => parseInt(str?.replace('g', '')) || 0;
-  
   const macroData = [
-    { name: 'Protein', value: parseMacro(macros.protein), color: '#2dd4bf' }, // Teal
-    { name: 'Carbs', value: parseMacro(macros.carbs), color: '#fb923c' },   // Orange
-    { name: 'Fats', value: parseMacro(macros.fats), color: '#facc15' },     // Yellow
+    { name: 'Protein', value: parseMacro(macros.protein), color: '#2dd4bf' }, 
+    { name: 'Carbs', value: parseMacro(macros.carbs), color: '#fb923c' },   
+    { name: 'Fats', value: parseMacro(macros.fats), color: '#facc15' },     
   ];
 
   const schedule = mealPlan.schedule || [];
@@ -94,7 +115,6 @@ const Nutrition = () => {
 
   return (
     <div className="min-h-screen bg-slate-900 text-white font-sans p-6 md:p-10 relative overflow-hidden">
-      {/* Background FX */}
       <div className="fixed inset-0 pointer-events-none bg-[radial-gradient(circle_at_top_right,_var(--tw-gradient-stops))] from-teal-900/20 via-slate-900 to-slate-900"></div>
 
       <div className="relative z-10 max-w-6xl mx-auto">
@@ -109,7 +129,7 @@ const Nutrition = () => {
             <h1 className="text-3xl font-black italic uppercase">Kitchen <span className="text-transparent bg-clip-text bg-gradient-to-r from-teal-400 to-emerald-400">Intelligence</span></h1>
           </div>
           <button 
-            onClick={generateNewPlan}
+            onClick={() => setShowHealthModal(true)} // Open Modal to Regenerate
             disabled={generating}
             className="flex items-center gap-2 px-5 py-2.5 bg-slate-800 border border-white/10 hover:border-teal-500/50 rounded-lg text-sm font-bold transition text-slate-300 hover:text-white"
           >
@@ -120,46 +140,27 @@ const Nutrition = () => {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           
-          {/* LEFT: MACRO BREAKDOWN (The Pro Feature) */}
+          {/* LEFT: MACRO BREAKDOWN */}
           <div className="lg:col-span-1 space-y-6">
-            
-            {/* 1. PIE CHART CARD */}
             <div className="bg-slate-800/40 border border-white/5 rounded-3xl p-6 backdrop-blur-sm">
               <h3 className="font-bold text-slate-300 mb-6 flex items-center gap-2">
                 <Flame className="text-orange-500" size={20} /> Daily Targets
               </h3>
-              
               <div className="h-48 w-full relative">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
-                    <Pie
-                      data={macroData}
-                      innerRadius={60}
-                      outerRadius={80}
-                      paddingAngle={5}
-                      dataKey="value"
-                      stroke="none"
-                    >
-                      {macroData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} />
-                      ))}
+                    <Pie data={macroData} innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value" stroke="none">
+                      {macroData.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.color} />)}
                     </Pie>
-                    <Tooltip 
-                      contentStyle={{ backgroundColor: '#0f172a', border: 'none', borderRadius: '8px', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.5)' }}
-                      itemStyle={{ fontWeight: 'bold' }}
-                    />
+                    <Tooltip contentStyle={{ backgroundColor: '#0f172a', border: 'none', borderRadius: '8px' }} itemStyle={{ fontWeight: 'bold' }} />
                     <Legend verticalAlign="bottom" height={36} iconType="circle" />
                   </PieChart>
                 </ResponsiveContainer>
-                
-                {/* Center Text Overlay */}
                 <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none pb-8">
                   <span className="text-2xl font-black text-white">{macros.calories}</span>
                   <span className="text-[10px] uppercase font-bold text-slate-500">Kcal</span>
                 </div>
               </div>
-
-              {/* Stats Grid */}
               <div className="grid grid-cols-3 gap-2 mt-4">
                 <MacroStat label="Protein" value={macros.protein} color="text-teal-400" />
                 <MacroStat label="Carbs" value={macros.carbs} color="text-orange-400" />
@@ -167,13 +168,12 @@ const Nutrition = () => {
               </div>
             </div>
 
-            {/* 2. SHOPPING TIP */}
             <div className="bg-teal-500/10 border border-teal-500/20 rounded-2xl p-5 flex gap-4 items-start">
               <ShoppingBag className="text-teal-400 shrink-0" />
               <div>
                 <h4 className="font-bold text-teal-400 text-sm mb-1">Shopping List Tip</h4>
                 <p className="text-xs text-slate-400 leading-relaxed">
-                  Stick to the outer aisles of the grocery store. That's where the fresh protein and produce live. Processed food is in the middle!
+                  Stick to the outer aisles. If you selected a health condition, please double check labels for hidden sugars or sodium.
                 </p>
               </div>
             </div>
@@ -181,8 +181,6 @@ const Nutrition = () => {
 
           {/* RIGHT: MEAL SCHEDULE */}
           <div className="lg:col-span-2">
-            
-            {/* Day Selector (Horizontal Scroll) */}
             <div className="flex overflow-x-auto pb-4 gap-3 mb-4 custom-scrollbar">
               {schedule.map((day, idx) => (
                 <button
@@ -199,7 +197,6 @@ const Nutrition = () => {
               ))}
             </div>
 
-            {/* Meal Cards */}
             <div className="space-y-4">
               {currentDayPlan.meals ? (
                 Object.entries(currentDayPlan.meals).map(([type, food], idx) => (
@@ -223,19 +220,77 @@ const Nutrition = () => {
                 </div>
               )}
             </div>
-
           </div>
         </div>
       </div>
+
+      {/* --- HEALTH CONDITIONS MODAL --- */}
+      {showHealthModal && (
+        <HealthModal 
+          onClose={() => setShowHealthModal(false)} 
+          onConfirm={generateNewPlan} 
+          conditions={conditionsList} 
+          selected={selectedConditions} 
+          toggle={toggleCondition} 
+        />
+      )}
     </div>
   );
 };
 
-// Simple sub-component for Macro Grid
+// --- SUB-COMPONENTS ---
 const MacroStat = ({ label, value, color }) => (
   <div className="text-center p-3 bg-slate-900/50 rounded-xl border border-white/5">
     <p className={`text-sm font-black ${color}`}>{value}</p>
     <p className="text-[10px] text-slate-500 uppercase font-bold">{label}</p>
+  </div>
+);
+
+const HealthModal = ({ onClose, onConfirm, conditions, selected, toggle }) => (
+  <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in zoom-in-95">
+    <div className="bg-slate-900 w-full max-w-lg rounded-3xl border border-white/10 p-6 shadow-2xl relative">
+      
+      <div className="flex justify-between items-center mb-6 border-b border-white/10 pb-4">
+        <h3 className="text-xl font-black italic text-white flex items-center gap-2">
+          <HeartPulse className="text-red-500" /> HEALTH FACTORS
+        </h3>
+        <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-full transition">
+          <X size={20} className="text-slate-400" />
+        </button>
+      </div>
+
+      <p className="text-slate-400 text-sm mb-6">
+        Select any medical conditions. The AI will strictly filter foods to ensure your meal plan is safe and effective.
+      </p>
+
+      <div className="grid grid-cols-2 gap-3 mb-8">
+        {conditions.map((condition) => {
+          const isSelected = selected.includes(condition);
+          return (
+            <button
+              key={condition}
+              onClick={() => toggle(condition)}
+              className={`flex items-center justify-between p-4 rounded-xl text-xs font-bold transition border ${
+                isSelected 
+                  ? 'bg-teal-500/20 border-teal-500 text-teal-400' 
+                  : 'bg-slate-950 border-white/5 text-slate-400 hover:border-white/20'
+              }`}
+            >
+              {condition}
+              {isSelected && <Check size={14} />}
+            </button>
+          )
+        })}
+      </div>
+
+      <button 
+        onClick={onConfirm}
+        className="w-full py-4 bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-400 hover:to-emerald-400 text-slate-900 font-black uppercase rounded-xl shadow-lg shadow-teal-500/20 transform hover:-translate-y-1 transition-all"
+      >
+        Generate Custom Plan
+      </button>
+
+    </div>
   </div>
 );
 

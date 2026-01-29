@@ -4,7 +4,7 @@ import toast from 'react-hot-toast';
 import api from '../api';
 import { 
   Calendar, Dumbbell, Clock, AlertCircle, ChevronLeft, 
-  CheckCircle2, Flame, RefreshCcw, X 
+  CheckCircle2, Flame, RefreshCcw, X, Youtube, ExternalLink, Check 
 } from 'lucide-react';
 
 const WorkoutPlan = () => {
@@ -12,32 +12,61 @@ const WorkoutPlan = () => {
   const [plan, setPlan] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activeDay, setActiveDay] = useState(0); 
+  
+  // --- COMPLETION STATE ---
+  const [completedDays, setCompletedDays] = useState([]); // Stores ["Monday", "Wednesday"] etc.
 
-  // --- MODAL STATE (The Fix) ---
+  // --- LOGGING MODAL STATE ---
   const [showModal, setShowModal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [logData, setLogData] = useState({
-    duration: 45, // Default so it's not empty
+    duration: 45, 
     calories: 300,
     mood: 'Good',
     notes: ''
   });
 
   useEffect(() => {
-    const fetchPlan = async () => {
-      try {
-        const res = await api.get('/ai/plan');
-        setPlan(res.data.plan); 
-      } catch (err) {
-        console.error("Error fetching plan", err);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchPlan();
+    fetchData();
   }, []);
 
-  // 1. Open Modal instead of submitting immediately
+  const fetchData = async () => {
+    try {
+      // 1. Fetch Plan AND History in parallel
+      const [planRes, historyRes] = await Promise.all([
+        api.get('/ai/plan'),
+        api.get('/tracking/history')
+      ]);
+
+      setPlan(planRes.data.plan); 
+
+      // 2. Calculate Completed Days (Logic: Look at logs from the last 7 days)
+      if (historyRes.data) {
+        const recentLogs = historyRes.data;
+        const now = new Date();
+        const oneWeekAgo = new Date(now.setDate(now.getDate() - 7));
+
+        const doneDays = recentLogs
+          .filter(log => new Date(log.date) > oneWeekAgo) // Only check recent history
+          .map(log => log.workoutDay); // We stored the day name here (e.g., "Monday")
+        
+        setCompletedDays(doneDays);
+      }
+
+    } catch (err) {
+      console.error("Error fetching data", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // --- NEW: DIRECT YOUTUBE OPENER ---
+  const openTutorial = (exerciseName) => {
+    const query = encodeURIComponent(`${exerciseName} exercise tutorial proper form`);
+    const url = `https://www.youtube.com/results?search_query=${query}`;
+    window.open(url, '_blank', 'noopener,noreferrer');
+  };
+
   const handleOpenLog = () => {
     setShowModal(true);
   };
@@ -46,7 +75,6 @@ const WorkoutPlan = () => {
     setLogData({ ...logData, [e.target.name]: e.target.value });
   };
 
-  // 2. Submit Logic (With Duration)
   const handleSubmitLog = async (e) => {
     e.preventDefault();
     setSubmitting(true);
@@ -54,7 +82,7 @@ const WorkoutPlan = () => {
       const dayName = plan.schedule[activeDay].day; 
       
       const payload = {
-        workoutDay: dayName,
+        workoutDay: dayName, // This saves "Monday" or "Push Day"
         duration: Number(logData.duration),
         calories: Number(logData.calories),
         mood: logData.mood,
@@ -65,11 +93,14 @@ const WorkoutPlan = () => {
       await api.post('/tracking/log', payload);
       
       toast.success("Workout Logged! Keep it up! 🔥");
+      
+      // Update local state immediately so UI turns green
+      setCompletedDays(prev => [...prev, dayName]);
+      
       setShowModal(false);
-      navigate('/dashboard'); 
     } catch (err) {
       console.error(err);
-      toast.error("Failed to log workout. Ensure duration is filled.");
+      toast.error("Failed to log workout.");
     } finally {
       setSubmitting(false);
     }
@@ -93,11 +124,14 @@ const WorkoutPlan = () => {
 
   const schedule = plan.schedule; 
   const currentDay = schedule[activeDay];
+  
+  // CHECK: Is the currently selected day already done?
+  const isCurrentDayDone = completedDays.includes(currentDay.day);
 
   return (
     <div className="min-h-screen bg-slate-900 text-white font-sans flex flex-col md:flex-row overflow-hidden relative">
       
-      {/* --- LEFT SIDEBAR: DAYS NAV --- */}
+      {/* --- LEFT SIDEBAR: SCHEDULE --- */}
       <div className="w-full md:w-80 bg-slate-950 border-r border-white/10 flex flex-col h-auto md:h-screen overflow-y-auto">
         <div className="p-6 border-b border-white/10 flex items-center gap-4">
           <Link to="/dashboard" className="p-2 hover:bg-white/10 rounded-full transition">
@@ -107,23 +141,36 @@ const WorkoutPlan = () => {
         </div>
         
         <div className="flex-1 p-4 space-y-2">
-          {schedule.map((day, index) => (
-            <button
-              key={index}
-              onClick={() => setActiveDay(index)}
-              className={`w-full text-left p-4 rounded-xl transition-all border ${
-                activeDay === index 
-                  ? 'bg-teal-500/10 border-teal-500/40 text-teal-400 shadow-lg shadow-teal-900/20' 
-                  : 'bg-slate-900/50 border-white/5 text-slate-400 hover:bg-slate-800 hover:text-white'
-              }`}
-            >
-              <div className="flex justify-between items-center mb-1">
-                <span className="font-bold text-sm">{day.day}</span>
-                {activeDay === index && <Flame size={14} className="animate-pulse" />}
-              </div>
-              <div className="text-xs opacity-70 truncate">{day.focus}</div>
-            </button>
-          ))}
+          {schedule.map((day, index) => {
+            const isDone = completedDays.includes(day.day);
+            const isActive = activeDay === index;
+
+            return (
+              <button
+                key={index}
+                onClick={() => setActiveDay(index)}
+                className={`w-full text-left p-4 rounded-xl transition-all border relative overflow-hidden ${
+                  isActive 
+                    ? 'bg-teal-500/10 border-teal-500/40 text-teal-400 shadow-lg' 
+                    : isDone 
+                      ? 'bg-emerald-900/20 border-emerald-500/30 text-emerald-400 opacity-80' 
+                      : 'bg-slate-900/50 border-white/5 text-slate-400 hover:bg-slate-800'
+                }`}
+              >
+                <div className="flex justify-between items-center mb-1 relative z-10">
+                  <span className="font-bold text-sm flex items-center gap-2">
+                    {day.day}
+                    {isDone && <CheckCircle2 size={14} className="text-emerald-500 fill-emerald-500/20" />}
+                  </span>
+                  {isActive && !isDone && <Flame size={14} className="animate-pulse" />}
+                </div>
+                <div className="text-xs opacity-70 truncate relative z-10">{day.focus}</div>
+                
+                {/* Visual "Done" Overlay */}
+                {isDone && <div className="absolute inset-0 bg-emerald-500/5 pointer-events-none"></div>}
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -133,10 +180,10 @@ const WorkoutPlan = () => {
 
         <div className="max-w-4xl mx-auto p-6 md:p-12 relative z-10">
           
-          {/* Header */}
           <div className="mb-8">
-            <div className="inline-flex items-center gap-2 px-3 py-1 mb-4 bg-teal-500/10 text-teal-400 rounded-full border border-teal-500/20 text-xs font-bold uppercase tracking-wider">
-               <Calendar size={14} /> Day {activeDay + 1} Protocol
+            <div className={`inline-flex items-center gap-2 px-3 py-1 mb-4 rounded-full border text-xs font-bold uppercase tracking-wider ${isCurrentDayDone ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-teal-500/10 text-teal-400 border-teal-500/20'}`}>
+               {isCurrentDayDone ? <Check size={14} /> : <Calendar size={14} />} 
+               {isCurrentDayDone ? "Completed" : `Day ${activeDay + 1} Protocol`}
             </div>
             <h1 className="text-4xl md:text-5xl font-black italic text-white mb-2">{currentDay.focus}</h1>
             <p className="text-slate-400 flex items-center gap-2">
@@ -145,15 +192,26 @@ const WorkoutPlan = () => {
           </div>
 
           {/* Exercise List */}
-          <div className="space-y-4">
+          <div className={`space-y-4 ${isCurrentDayDone ? 'opacity-75 grayscale-[0.5] transition-all' : ''}`}>
             {currentDay.exercises.map((exercise, i) => (
               <div key={i} className="group bg-slate-800/40 backdrop-blur-sm border border-white/10 rounded-2xl p-6 hover:border-teal-500/30 transition-all hover:bg-slate-800/60">
                 <div className="flex flex-col md:flex-row gap-6 items-start md:items-center">
-                  <div className="w-12 h-12 rounded-xl bg-slate-900 border border-white/10 flex items-center justify-center text-xl font-black text-slate-600 group-hover:text-teal-500 group-hover:border-teal-500/30 transition-colors">
-                    {i + 1}
+                  <div className={`w-12 h-12 rounded-xl border flex items-center justify-center text-xl font-black transition-colors ${isCurrentDayDone ? 'bg-emerald-900/20 border-emerald-500/20 text-emerald-500' : 'bg-slate-900 border-white/10 text-slate-600 group-hover:text-teal-500'}`}>
+                    {isCurrentDayDone ? <Check size={20} /> : i + 1}
                   </div>
-                  <div className="flex-1">
-                    <h3 className="text-xl font-bold text-white mb-1 group-hover:text-teal-100 transition">{exercise.name}</h3>
+                  <div className="flex-1 w-full">
+                    
+                    <div className="flex justify-between items-start mb-1">
+                      <h3 className="text-xl font-bold text-white group-hover:text-teal-100 transition">{exercise.name}</h3>
+                      <button 
+                        onClick={() => openTutorial(exercise.name)}
+                        className="flex items-center gap-2 px-3 py-1.5 bg-red-600/10 hover:bg-red-600 text-red-500 hover:text-white rounded-lg text-xs font-bold uppercase tracking-wider transition border border-red-500/20 group/btn"
+                      >
+                         <Youtube size={16} className="group-hover/btn:fill-white" /> Watch
+                         <ExternalLink size={12} className="opacity-50" />
+                      </button>
+                    </div>
+
                     <div className="flex flex-wrap gap-4 text-sm text-slate-400 mt-2">
                       <span className="flex items-center gap-1.5 bg-black/20 px-3 py-1 rounded-lg border border-white/5">
                         <RefreshCcw size={14} className="text-teal-500" /> {exercise.sets} Sets
@@ -163,27 +221,25 @@ const WorkoutPlan = () => {
                       </span>
                     </div>
                   </div>
-                  {exercise.notes && (
-                    <div className="md:max-w-xs w-full bg-teal-500/5 border border-teal-500/10 p-4 rounded-xl text-sm text-teal-200/80 italic">
-                      <div className="flex items-center gap-2 mb-1 text-teal-400 font-bold text-xs uppercase not-italic">
-                        <AlertCircle size={12} /> Coach Tip
-                      </div>
-                      "{exercise.notes}"
-                    </div>
-                  )}
                 </div>
               </div>
             ))}
           </div>
 
-          {/* Completion Button */}
+          {/* Completion Button (DISABLED IF DONE) */}
           <div className="mt-12 flex justify-center pb-10">
-            <button 
-              onClick={handleOpenLog} // <-- Opens Modal Now
-              className="flex items-center gap-3 px-8 py-4 bg-teal-500 text-slate-900 font-bold text-lg rounded-xl hover:bg-teal-400 hover:scale-105 transition shadow-xl shadow-teal-500/20"
-            >
-              <CheckCircle2 size={24} /> Mark Workout Complete
-            </button>
+            {isCurrentDayDone ? (
+               <div className="px-8 py-4 bg-emerald-500/10 border border-emerald-500/50 text-emerald-400 font-bold text-lg rounded-xl flex items-center gap-3 cursor-default">
+                 <CheckCircle2 size={24} /> Day Completed
+               </div>
+            ) : (
+               <button 
+                onClick={handleOpenLog} 
+                className="flex items-center gap-3 px-8 py-4 bg-teal-500 text-slate-900 font-bold text-lg rounded-xl hover:bg-teal-400 hover:scale-105 transition shadow-xl shadow-teal-500/20"
+               >
+                <CheckCircle2 size={24} /> Mark Workout Complete
+               </button>
+            )}
           </div>
 
         </div>
@@ -193,67 +249,27 @@ const WorkoutPlan = () => {
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
           <div className="bg-slate-800 w-full max-w-md rounded-3xl border border-white/10 p-6 shadow-2xl animate-in zoom-in-95">
-            
             <div className="flex justify-between items-center mb-6">
               <h3 className="text-xl font-black italic">COMPLETE SESSION</h3>
               <button onClick={() => setShowModal(false)} className="p-2 hover:bg-white/10 rounded-full transition">
                 <X size={20} className="text-slate-400" />
               </button>
             </div>
-
             <form onSubmit={handleSubmitLog} className="space-y-4">
               <div>
                 <label className="text-xs font-bold text-slate-400 uppercase ml-1">Duration (Mins)</label>
-                <input 
-                  type="number" 
-                  name="duration" 
-                  required 
-                  value={logData.duration} 
-                  onChange={handleInputChange}
-                  className="w-full bg-slate-900 border border-white/10 rounded-xl p-4 text-white focus:border-teal-500 outline-none font-bold text-lg"
-                />
+                <input type="number" name="duration" required value={logData.duration} onChange={handleInputChange} className="w-full bg-slate-900 border border-white/10 rounded-xl p-4 text-white focus:border-teal-500 outline-none font-bold text-lg" />
               </div>
-
               <div>
-                <label className="text-xs font-bold text-slate-400 uppercase ml-1">Calories Burned (Approx)</label>
-                <input 
-                  type="number" 
-                  name="calories" 
-                  value={logData.calories} 
-                  onChange={handleInputChange}
-                  className="w-full bg-slate-900 border border-white/10 rounded-xl p-4 text-white focus:border-teal-500 outline-none"
-                />
+                <label className="text-xs font-bold text-slate-400 uppercase ml-1">Calories Burned</label>
+                <input type="number" name="calories" value={logData.calories} onChange={handleInputChange} className="w-full bg-slate-900 border border-white/10 rounded-xl p-4 text-white focus:border-teal-500 outline-none" />
               </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                   <label className="text-xs font-bold text-slate-400 uppercase ml-1">Mood</label>
-                   <select name="mood" value={logData.mood} onChange={handleInputChange} className="w-full bg-slate-900 border border-white/10 rounded-xl p-4 text-white focus:border-teal-500 outline-none">
-                     <option>Great</option>
-                     <option>Good</option>
-                     <option>Hard</option>
-                     <option>Tired</option>
-                   </select>
-                </div>
-              </div>
-
-              <textarea 
-                name="notes" 
-                value={logData.notes} 
-                onChange={handleInputChange}
-                placeholder="How did it go? (Optional)"
-                className="w-full bg-slate-900 border border-white/10 rounded-xl p-4 text-white focus:border-teal-500 outline-none h-24 resize-none"
-              ></textarea>
-
-              <button 
-                type="submit" 
-                disabled={submitting}
-                className="w-full py-4 bg-teal-500 hover:bg-teal-400 text-slate-900 font-black uppercase rounded-xl shadow-lg shadow-teal-500/20 transition disabled:opacity-50"
-              >
-                {submitting ? 'Saving...' : 'Confirm & Log'}
-              </button>
+              <select name="mood" value={logData.mood} onChange={handleInputChange} className="w-full bg-slate-900 border border-white/10 rounded-xl p-4 text-white focus:border-teal-500 outline-none">
+                 <option>Great</option><option>Good</option><option>Hard</option><option>Tired</option>
+              </select>
+              <textarea name="notes" value={logData.notes} onChange={handleInputChange} placeholder="Notes..." className="w-full bg-slate-900 border border-white/10 rounded-xl p-4 text-white outline-none h-24 resize-none"></textarea>
+              <button type="submit" disabled={submitting} className="w-full py-4 bg-teal-500 hover:bg-teal-400 text-slate-900 font-black uppercase rounded-xl shadow-lg transition disabled:opacity-50">{submitting ? 'Saving...' : 'Confirm & Log'}</button>
             </form>
-
           </div>
         </div>
       )}

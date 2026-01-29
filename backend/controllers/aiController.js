@@ -1,5 +1,5 @@
 const { GoogleGenerativeAI } = require("@google/generative-ai");
-const User = require('../models/User'); // Context for Name
+const User = require('../models/User'); 
 const Profile = require('../models/Profile');
 const Workout = require('../models/Workout');
 const MealPlan = require('../models/MealPlan');
@@ -8,8 +8,19 @@ const ExerciseCache = require('../models/ExerciseCache');
 // Initialize Gemini
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
-// Helper function to pause execution (Used for Retries)
+// --- HELPER 1: PAUSE FOR RETRIES ---
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+// --- HELPER 2: CLEAN JSON (THE FIX) ---
+// This extracts ONLY the JSON part { ... } and ignores extra text.
+const cleanJSON = (text) => {
+  const firstOpen = text.indexOf('{');
+  const lastClose = text.lastIndexOf('}');
+  if (firstOpen !== -1 && lastClose !== -1) {
+    return text.substring(firstOpen, lastClose + 1);
+  }
+  return text; // Return original if no brackets found (will likely fail parse, but safer)
+};
 
 // --- ROBUST BACKUP DATA (The Fail-Safe) ---
 const FALLBACK_EXERCISES = {
@@ -20,44 +31,16 @@ const FALLBACK_EXERCISES = {
     commonMistakes: ["Knees caving in", "Heels lifting", "Not deep enough"],
     difficulty: "Intermediate"
   },
-  "squats": { 
-    name: "Squat",
-    targetMuscles: ["Quads", "Glutes", "Hamstrings"],
-    instructions: ["Stand feet shoulder-width.", "Lower hips like sitting in a chair.", "Keep chest up.", "Drive back up."],
-    commonMistakes: ["Knees caving in", "Heels lifting", "Not deep enough"],
-    difficulty: "Intermediate"
-  },
-  "deadlift": {
-    name: "Deadlift",
-    targetMuscles: ["Hamstrings", "Glutes", "Back"],
-    instructions: ["Feet hip-width under bar.", "Hinge at hips to grip bar.", "Drive through heels to stand.", "Lower with control."],
-    commonMistakes: ["Rounding back", "Jerking the bar", "Squatting the weight"],
-    difficulty: "Advanced"
-  },
-  "deadlifts": { 
-    name: "Deadlift",
-    targetMuscles: ["Hamstrings", "Glutes", "Back"],
-    instructions: ["Feet hip-width under bar.", "Hinge at hips to grip bar.", "Drive through heels to stand.", "Lower with control."],
-    commonMistakes: ["Rounding back", "Jerking the bar", "Squatting the weight"],
-    difficulty: "Advanced"
-  },
   "bench press": {
     name: "Bench Press",
     targetMuscles: ["Chest", "Triceps", "Front Delts"],
     instructions: ["Lie on bench.", "Grip bar wider than shoulders.", "Lower to mid-chest.", "Press up."],
     commonMistakes: ["Flaring elbows", "Bouncing off chest", "Arching back"],
     difficulty: "Intermediate"
-  },
-  "pull up": {
-    name: "Pull Up",
-    targetMuscles: ["Lats", "Biceps", "Upper Back"],
-    instructions: ["Grip bar wider than shoulders.", "Pull chest to bar.", "Lower all the way down."],
-    commonMistakes: ["Using momentum", "Not going full range", "Shrugging shoulders"],
-    difficulty: "Intermediate"
   }
 };
 
-// @desc    Generate AI Workout Plan (WITH RETRY)
+// @desc    Generate AI Workout Plan
 // @route   POST /api/ai/generate
 exports.generateWorkout = async (req, res) => {
   try {
@@ -76,21 +59,18 @@ exports.generateWorkout = async (req, res) => {
       - Structure: { "schedule": [ { "day": "Monday", "focus": "Push", "exercises": [ { "name": "Bench Press", "sets": "3", "reps": "8-12", "notes": "Focus on form" } ] } ] }
     `;
 
-    // KEPT ORIGINAL MODEL
     const model = genAI.getGenerativeModel({ model: "gemini-flash-latest" });
     
-    // --- RETRY LOGIC ---
+    // Retry Logic
     let retries = 3;
     let result;
-    
     while (retries > 0) {
       try {
         result = await model.generateContent(prompt);
-        break; // Success
+        break; 
       } catch (err) {
         if (err.status === 429 && retries > 1) {
-          console.log(`⚠️ Rate limit (Workout). Waiting 15s... (${retries} left)`);
-          await sleep(15000); 
+          await sleep(5000); 
           retries--;
         } else {
           throw err; 
@@ -98,13 +78,17 @@ exports.generateWorkout = async (req, res) => {
       }
     }
 
-    const text = result.response.text().replace(/```json|```/g, '').trim();
+    // CLEAN THE RESPONSE
+    const rawText = result.response.text();
+    const jsonText = cleanJSON(rawText); 
 
     let workoutPlan;
     try {
-      workoutPlan = JSON.parse(text);
+      workoutPlan = JSON.parse(jsonText);
     } catch (parseError) {
-      return res.status(500).json({ msg: 'AI response was not valid JSON', raw: text });
+      console.error("JSON Parse Error:", parseError);
+      console.log("Raw Text was:", rawText);
+      return res.status(500).json({ msg: 'AI response was not valid JSON', raw: rawText });
     }
 
     let workout = await Workout.findOneAndUpdate(
@@ -132,43 +116,49 @@ exports.getWorkout = async (req, res) => {
   }
 };
 
-// @desc    Generate AI Meal Plan (WITH RETRY)
+// @desc    Generate AI Meal Plan (Smart Health Aware)
 // @route   POST /api/ai/generate-meal
 exports.generateMealPlan = async (req, res) => {
   try {
     const profile = await Profile.findOne({ user: req.user.id });
     if (!profile) return res.status(400).json({ msg: 'Please complete your profile first' });
 
+    // 1. Get Health Conditions
+    const healthConditions = req.body.healthConditions || [];
+
     const prompt = `
-      Act as an elite sports nutritionist. Create a 7-day meal plan for:
+      Act as an expert clinical nutritionist. Create a 7-day meal plan for:
       - Weight: ${profile.weight}kg, Goal: ${profile.goal}
-      - DIETARY PREFERENCE: ${profile.dietaryPreference} (STRICT REQUIREMENT)
+      - DIETARY PREFERENCE: ${profile.dietaryPreference}
+      - HEALTH CONDITIONS: ${healthConditions.length > 0 ? healthConditions.join(", ") : "None"}
       - Allergies: ${profile.allergies?.length > 0 ? profile.allergies.join(", ") : "None"}
 
-      STRICT REQUIREMENTS:
-      - If Dietary Preference is "Vegetarian", the plan MUST NOT contain any meat, chicken, or fish.
+      CRITICAL MEDICAL GUIDELINES (MUST FOLLOW):
+      1. IF "Diabetes": Focus on Low Glycemic Index (GI) foods. Zero refined sugars. High fiber. Balance carbs with protein/fat.
+      2. IF "PCOD" or "PCOS": Anti-inflammatory focus. Limit dairy and gluten if possible. Focus on whole foods.
+      3. IF "Hypertension" (High BP): DASH diet principles. Low sodium.
+      4. IF "Thyroid" (Hypo): High selenium/zinc (brazil nuts, eggs). Avoid raw goitrogenic veggies (kale/broccoli) unless cooked.
+
+      OUTPUT FORMAT:
       - Return ONLY valid JSON. No markdown.
       - Structure: { 
-          "macros": { "calories": 2500, "protein": "180g", "carbs": "250g", "fats": "80g" },
+          "macros": { "calories": 2000, "protein": "150g", "carbs": "180g", "fats": "70g" },
           "schedule": [ { "day": "Monday", "meals": { "breakfast": "...", "lunch": "...", "snack": "...", "dinner": "..." } } ] 
         }
     `;
 
-    // KEPT ORIGINAL MODEL
     const model = genAI.getGenerativeModel({ model: "gemini-flash-latest" });
     
-    // --- RETRY LOGIC ---
+    // Retry Logic
     let retries = 3;
     let result;
-    
     while (retries > 0) {
       try {
         result = await model.generateContent(prompt);
         break; 
       } catch (err) {
         if (err.status === 429 && retries > 1) {
-          console.log(`⚠️ Rate limit (Meal). Waiting 15s... (${retries} left)`);
-          await sleep(15000); 
+          await sleep(5000); 
           retries--;
         } else {
           throw err; 
@@ -176,15 +166,20 @@ exports.generateMealPlan = async (req, res) => {
       }
     }
 
-    const text = result.response.text().replace(/```json|```/g, '').trim();
+    // CLEAN THE RESPONSE
+    const rawText = result.response.text();
+    const jsonText = cleanJSON(rawText); 
 
     let mealPlanData;
     try {
-      mealPlanData = JSON.parse(text);
+      mealPlanData = JSON.parse(jsonText);
     } catch (parseError) {
-      return res.status(500).json({ msg: 'AI response was not valid JSON', raw: text });
+      console.error("JSON Parse Error:", parseError);
+      console.log("Raw Text was:", rawText);
+      return res.status(500).json({ msg: 'AI response was not valid JSON', raw: rawText });
     }
 
+    // Save to DB
     let mealPlan = await MealPlan.findOneAndUpdate(
       { user: req.user.id },
       { plan: mealPlanData, generatedAt: Date.now() },
@@ -210,29 +205,19 @@ exports.getMealPlan = async (req, res) => {
   }
 };
 
-// @desc    Get Info about a specific exercise (WITH CACHE + FALLBACK + RETRY)
+// @desc    Get Info about a specific exercise
 // @route   POST /api/ai/explain-exercise
 exports.explainExercise = async (req, res) => {
   try {
-    // 1. SAFE INPUT PROCESSING
     let { exerciseName } = req.body;
-    
-    if (!exerciseName) {
-      return res.status(400).json({ msg: "Please provide an exercise name" });
-    }
-    
+    if (!exerciseName) return res.status(400).json({ msg: "Please provide an exercise name" });
     exerciseName = exerciseName.toLowerCase().trim();
 
-    // 2. CHECK DATABASE FIRST (The Cache)
+    // CHECK CACHE
     const cachedExercise = await ExerciseCache.findOne({ name: exerciseName });
-    if (cachedExercise) {
-      console.log(`✅ Served "${exerciseName}" from Cache (No AI usage)`);
-      return res.json(cachedExercise.data);
-    }
+    if (cachedExercise) return res.json(cachedExercise.data);
 
-    // 3. IF NOT IN DB, ASK AI (With Retry Logic)
-    console.log(`🤖 Asking AI about "${exerciseName}"...`);
-    
+    // ASK AI
     const prompt = `
       Act as an expert biomechanics coach. Explain the exercise "${exerciseName}" briefly.
       Return ONLY valid JSON in this format:
@@ -245,129 +230,65 @@ exports.explainExercise = async (req, res) => {
       }
     `;
 
-    // KEPT ORIGINAL MODEL
     const model = genAI.getGenerativeModel({ model: "gemini-flash-latest" });
+    const result = await model.generateContent(prompt);
     
-    let retries = 2; // Reduced retries so we can fallback faster
-    let result;
-    
-    while (retries > 0) {
-      try {
-        result = await model.generateContent(prompt);
-        break; 
-      } catch (err) {
-        if (err.status === 429 && retries > 1) {
-          console.log(`⚠️ Rate limit (Exercise). Waiting 5s...`);
-          await sleep(5000); 
-          retries--;
-        } else {
-          throw err; 
-        }
-      }
-    }
+    // CLEAN RESPONSE
+    const rawText = result.response.text();
+    const jsonText = cleanJSON(rawText);
+    const exerciseData = JSON.parse(jsonText);
 
-    const response = await result.response;
-    const text = response.text().replace(/```json|```/g, '').trim();
-    const exerciseData = JSON.parse(text);
-
-    // Save to Cache
+    // Save Cache
     await new ExerciseCache({ name: exerciseName, data: exerciseData }).save();
-    console.log(`💾 Saved "${exerciseName}" to Cache`);
-
     res.json(exerciseData);
 
   } catch (err) {
     console.error("Exercise Gen Error:", err.message);
-
-    // 4. FALLBACK SYSTEM (If API Fails, use Backup)
+    
+    // Fallback
     const safeName = req.body.exerciseName ? req.body.exerciseName.toLowerCase().trim() : "";
-
     if (FALLBACK_EXERCISES[safeName]) {
-      console.log(`🛡️ Serving Backup Data for "${safeName}"`);
-      
-      const fallbackData = FALLBACK_EXERCISES[safeName];
-      try {
-        await new ExerciseCache({ name: safeName, data: fallbackData }).save();
-      } catch (e) { /* Ignore duplicate key error */ }
-      
-      return res.json(fallbackData);
+      return res.json(FALLBACK_EXERCISES[safeName]);
     }
-
-    res.status(503).json({ 
-      msg: "System busy. Try searching for 'Squat', 'Deadlifts' or 'Bench Press' (Cached)." 
-    });
+    res.status(503).json({ msg: "System busy. Try common exercises." });
   }
 };
 
-// @desc    Chat with AI Coach (SMART CONTEXT VERSION)
+// @desc    Chat with AI Coach (Smart Context)
 // @route   POST /api/ai/chat
 exports.chatWithCoach = async (req, res) => {
   const { message } = req.body;
 
   try {
-    // 1. Fetch User Context (Profile & Current Plan)
     const user = await User.findById(req.user.id);
     const profile = await Profile.findOne({ user: req.user.id });
     const latestWorkout = await Workout.findOne({ user: req.user.id }).sort({ createdAt: -1 });
 
-    // 2. Build the "System Prompt"
     let contextPrompt = `
       You are an elite personal trainer AI named "TrainerAI".
-      
       USER CONTEXT:
       - Name: ${user.name}
-      - Age: ${profile?.age || '?'}
       - Goal: ${profile?.goal || 'General Fitness'}
-      - Experience: ${profile?.activityLevel || 'Beginner'}
-      - Injuries/Limits: ${profile?.injuries && profile.injuries.length > 0 ? profile.injuries.join(", ") : "None"}
+      - Injuries: ${profile?.injuries && profile.injuries.length > 0 ? profile.injuries.join(", ") : "None"}
     `;
 
     if (latestWorkout && latestWorkout.plan) {
-      // Add a summary of their current split
-      contextPrompt += `
-      - Current Plan available in system. 
-      `;
+      contextPrompt += `- Current Plan available. `;
     }
 
     contextPrompt += `
-      INSTRUCTIONS:
-      - Answer the user's question specifically based on their goal of "${profile?.goal}".
-      - Keep answers concise (under 80 words), motivating, and actionable.
-      - If they ask about their plan, refer to their specific workouts.
-      
       USER QUESTION: "${message}"
+      Keep answer concise (under 80 words).
     `;
 
-    // KEPT ORIGINAL MODEL
     const model = genAI.getGenerativeModel({ model: "gemini-flash-latest" });
-
-    // --- RETRY LOGIC ---
-    let retries = 3;
-    let result;
+    const result = await model.generateContent(contextPrompt);
+    const text = result.response.text();
     
-    while (retries > 0) {
-      try {
-        result = await model.generateContent(contextPrompt);
-        break; 
-      } catch (err) {
-        if (err.status === 429 && retries > 1) {
-          console.log(`⚠️ Rate limit (Chat). Waiting 10s...`);
-          await sleep(10000); 
-          retries--;
-        } else {
-          throw err; 
-        }
-      }
-    }
-
-    const response = await result.response;
-    const text = response.text();
     res.json({ reply: text });
 
   } catch (err) {
     console.error("Chat Error:", err.message);
-    res.status(503).json({ 
-      reply: "I'm currently overwhelmed with requests! Please give me a minute to cool down. 🧊" 
-    });
+    res.status(503).json({ reply: "I need a moment to think. Try again!" });
   }
 };

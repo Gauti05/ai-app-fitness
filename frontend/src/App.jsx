@@ -11,6 +11,7 @@ import Leaderboard from './pages/Leaderboard';
 import History from './pages/History';
 import ExerciseLibrary from './pages/ExerciseLibrary';
 import Chatbot from './components/Chatbot';
+import MobileNav from './components/MobileNav';
 import Setup from './pages/Setup'; // <--- EXISTING USER FLOW (Update Stats)
 import LogWorkout from './pages/LogWorkout';
 
