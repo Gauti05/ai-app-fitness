@@ -7,7 +7,8 @@ import {
 import api from '../api'; 
 import { 
   LayoutDashboard, Dumbbell, Utensils, LogOut, 
-  Calendar, Flame, ChevronRight, Zap, Loader, Trophy
+  Calendar, Flame, ChevronRight, Zap, Loader, Trophy,
+  Menu, X // <--- Added Icons for Mobile Menu
 } from 'lucide-react';
 // --- IMPORT THE NEW HEATMAP COMPONENT ---
 import MuscleHeatmap from '../components/MuscleHeatmap';
@@ -28,6 +29,9 @@ const Dashboard = () => {
   
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
+
+  // --- NEW: STATE FOR MOBILE SIDEBAR ---
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -101,39 +105,43 @@ const Dashboard = () => {
   const userInitial = displayName[0].toUpperCase();
 
   return (
-    // Changed 'flex' to 'flex flex-col md:flex-row' to stack sidebar on mobile
-    <div className="min-h-screen bg-slate-900 text-white font-sans flex flex-col md:flex-row relative overflow-hidden">
+    <div className="min-h-screen bg-slate-900 text-white font-sans flex relative overflow-hidden">
       
+      {/* --- MOBILE OVERLAY (Closes sidebar when clicked) --- */}
+      {isSidebarOpen && (
+        <div 
+          className="fixed inset-0 bg-black/80 z-40 md:hidden backdrop-blur-sm"
+          onClick={() => setIsSidebarOpen(false)}
+        />
+      )}
+
       {/* SIDEBAR */}
-      {/* UPDATES FOR MOBILE:
-         1. Removed 'hidden'.
-         2. Added 'w-full md:w-64' -> Full width on mobile, 64px on desktop.
-         3. Added 'h-auto md:h-screen' -> Auto height on mobile, full height on desktop.
-         4. Added 'relative md:fixed' -> Scrollable on mobile, fixed on desktop.
-         5. Added 'border-b md:border-r' -> Border bottom on mobile, border right on desktop.
-      */}
-      <aside className="flex flex-col w-full md:w-64 bg-slate-950/60 backdrop-blur-xl border-b md:border-b-0 md:border-r border-white/10 h-auto md:h-screen relative md:fixed z-20">
-        <div className="p-4 md:p-6 border-b border-white/10 flex justify-between items-center md:block">
-          <span className="text-xl md:text-2xl font-black italic tracking-tighter text-white">
+      <aside className={`
+        fixed top-0 left-0 z-50 h-screen w-64 bg-slate-950/60 backdrop-blur-xl border-r border-white/10 flex flex-col
+        transition-transform duration-300 ease-in-out
+        ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} 
+        md:translate-x-0
+      `}>
+        <div className="p-6 border-b border-white/10 flex justify-between items-center">
+          <span className="text-2xl font-black italic tracking-tighter text-white">
             TRAINER<span className="text-teal-400">AI</span>
           </span>
-          {/* Mobile Logout Icon (Optional tweak to keep header clean) */}
-          <button onClick={handleLogout} className="md:hidden text-slate-400 hover:text-red-400">
-            <LogOut size={20} />
+          {/* Close Button (Mobile Only) */}
+          <button onClick={() => setIsSidebarOpen(false)} className="md:hidden text-slate-400 hover:text-white">
+            <X size={24} />
           </button>
         </div>
-        
-        {/* Nav Items Container: Flex Row on Mobile (Scrollable), Flex Col on Desktop */}
-        <nav className="flex-1 p-2 md:p-4 flex flex-row md:flex-col gap-2 overflow-x-auto md:overflow-visible">
-          <Link to="/dashboard" className="min-w-fit"><NavItem icon={<LayoutDashboard size={20}/>} label="Overview" active /></Link>
-          <Link to="/workout-plan" className="min-w-fit"><NavItem icon={<Dumbbell size={20}/>} label="Workouts" /></Link>
-          <Link to="/nutrition" className="min-w-fit"><NavItem icon={<Utensils size={20}/>} label="Nutrition" /></Link>
-          <Link to="/leaderboard" className="min-w-fit"><NavItem icon={<Trophy size={20}/>} label="Leaderboard" /></Link>
-          <Link to="/history" className="min-w-fit"><NavItem icon={<Calendar size={20}/>} label="History" /></Link>
+
+        <nav className="flex-1 p-4 space-y-2">
+          {/* Added onClick to close sidebar when link is clicked on mobile */}
+          <Link to="/dashboard" onClick={() => setIsSidebarOpen(false)}><NavItem icon={<LayoutDashboard size={20}/>} label="Overview" active /></Link>
+          <Link to="/workout-plan" onClick={() => setIsSidebarOpen(false)}><NavItem icon={<Dumbbell size={20}/>} label="Workouts" /></Link>
+          <Link to="/nutrition" onClick={() => setIsSidebarOpen(false)}><NavItem icon={<Utensils size={20}/>} label="Nutrition" /></Link>
+          <Link to="/leaderboard" onClick={() => setIsSidebarOpen(false)}><NavItem icon={<Trophy size={20}/>} label="Leaderboard" /></Link>
+          <Link to="/history" onClick={() => setIsSidebarOpen(false)}><NavItem icon={<Calendar size={20}/>} label="History" /></Link>
         </nav>
         
-        {/* Desktop Logout Button */}
-        <div className="hidden md:block p-4 border-t border-white/10">
+        <div className="p-4 border-t border-white/10">
           <button onClick={handleLogout} className="flex items-center gap-3 w-full p-3 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition">
             <LogOut size={20} /> <span className="font-bold text-sm">Logout</span>
           </button>
@@ -141,25 +149,33 @@ const Dashboard = () => {
       </aside>
 
       {/* MAIN CONTENT */}
-      {/* UPDATES FOR MOBILE:
-         1. Removed 'md:ml-64' default margin on mobile (added 'md:' prefix).
-         2. Added 'mt-0' to ensure no gap.
-      */}
-      <main className="relative z-10 flex-1 md:ml-64 p-4 md:p-10 bg-slate-900 pb-28">
+      <main className="relative z-10 flex-1 md:ml-64 p-4 md:p-10 bg-slate-900 pb-28 min-w-0">
         <div className="fixed inset-0 pointer-events-none opacity-5 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-teal-500 via-slate-900 to-slate-900"></div>
         
         {/* Header */}
         <header className="flex justify-between items-center mb-6 md:mb-10 relative z-10">
-          <div>
-            <h1 className="text-xl md:text-3xl font-bold text-white drop-shadow-md">Welcome back, {displayName}</h1>
-            <div className="flex items-center gap-2 mt-2">
-               <span className="px-3 py-1 rounded-full bg-teal-500/10 text-teal-400 border border-teal-500/20 text-[10px] md:text-xs font-bold uppercase tracking-wider flex items-center gap-1">
-                 <Trophy size={12} /> Rank: {stats.level}
-               </span>
-               <p className="text-slate-400 text-sm hidden md:block">Let's crush today's goals.</p>
+          <div className="flex items-center gap-4">
+            
+            {/* --- HAMBURGER MENU (Mobile Only) --- */}
+            <button 
+              onClick={() => setIsSidebarOpen(true)}
+              className="md:hidden p-2 bg-slate-800 rounded-lg text-white border border-white/10"
+            >
+              <Menu size={24} />
+            </button>
+
+            <div>
+              <h1 className="text-xl md:text-3xl font-bold text-white drop-shadow-md truncate">Welcome back, {displayName}</h1>
+              <div className="flex items-center gap-2 mt-2">
+                 <span className="px-3 py-1 rounded-full bg-teal-500/10 text-teal-400 border border-teal-500/20 text-[10px] md:text-xs font-bold uppercase tracking-wider flex items-center gap-1">
+                   <Trophy size={10} /> Rank: {stats.level}
+                 </span>
+                 <p className="text-slate-400 text-sm hidden md:block">Let's crush today's goals.</p>
+              </div>
             </div>
           </div>
-          <Link to="/setup" className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-gradient-to-br from-teal-400 to-emerald-500 flex items-center justify-center text-slate-900 font-black shadow-[0_0_20px_rgba(20,184,166,0.3)] hover:scale-110 transition shrink-0">
+          
+          <Link to="/setup" className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-gradient-to-br from-teal-400 to-emerald-500 flex items-center justify-center text-slate-900 font-black shadow-[0_0_20px_rgba(20,184,166,0.3)] hover:scale-110 transition shrink-0 ml-4">
             {userInitial}
           </Link>
         </header>
@@ -169,8 +185,8 @@ const Dashboard = () => {
           <StatCard icon={<Flame className="text-orange-500" />} label="Streak" value={`${stats.streak} Days`} />
           <StatCard icon={<Dumbbell className="text-blue-400" />} label="Workouts" value={`${stats.totalWorkouts || 0} Total`} />
           
-          <div className="col-span-2 md:col-span-2 bg-slate-800/40 backdrop-blur-md border border-white/10 rounded-xl p-4 flex flex-col justify-between">
-             <div className="flex justify-between items-center mb-4">
+          <div className="col-span-2 md:col-span-2 bg-slate-800/40 backdrop-blur-md border border-white/10 rounded-xl p-4 flex flex-col justify-between min-w-0">
+             <div className="flex justify-between items-center mb-2">
                 <p className="text-slate-400 text-xs font-bold uppercase tracking-wider">Activity (Last 7 Days)</p>
              </div>
              <div className="h-24 w-full min-w-0">
@@ -178,7 +194,7 @@ const Dashboard = () => {
                  <BarChart data={stats.chartData || []}>
                    <Tooltip 
                      cursor={{fill: 'rgba(255,255,255,0.05)'}} 
-                     contentStyle={{background: '#0f172a', border: '1px solid #334155', borderRadius: '8px'}}
+                     contentStyle={{background: '#0f172a', border: '1px solid #334155', borderRadius: '8px', fontSize: '12px'}}
                    />
                    <Bar dataKey="workouts" radius={[4, 4, 0, 0]}>
                      {(stats.chartData || []).map((entry, index) => (
@@ -255,24 +271,26 @@ const Dashboard = () => {
   );
 };
 
-// Update NavItem to behave nicely in horizontal scroll (whitespace-nowrap)
+// NavItem Component
 const NavItem = ({ icon, label, active }) => (
-  <button className={`flex items-center gap-2 md:gap-3 px-3 md:px-4 py-2 md:py-3 rounded-lg transition whitespace-nowrap ${active ? 'bg-teal-500/10 text-teal-400 border border-teal-500/20' : 'text-slate-400 hover:bg-white/5 hover:text-white border border-transparent'}`}>
-    {React.cloneElement(icon, { size: 18 })}
-    <span className="font-semibold text-xs md:text-sm">{label}</span>
+  <button className={`flex items-center gap-3 w-full p-3 rounded-lg transition ${active ? 'bg-teal-500/10 text-teal-400 border border-teal-500/20' : 'text-slate-400 hover:bg-white/5 hover:text-white border border-transparent'}`}>
+    {icon}
+    <span className="font-semibold text-sm">{label}</span>
   </button>
 );
 
+// StatCard Component
 const StatCard = ({ icon, label, value }) => (
-  <div className="bg-slate-800/40 border border-white/10 p-3 md:p-6 rounded-xl flex flex-col md:flex-row items-start md:items-center gap-2 md:gap-4 hover:border-teal-500/30 transition h-full">
-    <div className="p-2 md:p-3 bg-slate-900 rounded-lg border border-white/5 shrink-0">{icon}</div>
-    <div>
-      <p className="text-slate-400 text-[10px] md:text-xs font-bold uppercase tracking-wider">{label}</p>
+  <div className="bg-slate-800/40 border border-white/10 p-3 md:p-6 rounded-xl flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4 hover:border-teal-500/30 transition h-full">
+    <div className="p-2 md:p-3 bg-slate-900 rounded-lg border border-white/5 shrink-0">{React.cloneElement(icon, { size: 18, className: icon.props.className })}</div>
+    <div className="min-w-0">
+      <p className="text-slate-400 text-[10px] md:text-xs font-bold uppercase tracking-wider truncate">{label}</p>
       <p className="text-lg md:text-xl font-bold text-white truncate">{value}</p>
     </div>
   </div>
 );
 
+// QuickAction Component
 const QuickAction = ({ label }) => (
   <button className="w-full flex justify-between items-center p-4 bg-slate-900/40 border border-white/5 rounded-lg hover:border-teal-500/50 hover:bg-slate-800 transition group">
     <span className="text-sm font-medium text-slate-300 group-hover:text-white">{label}</span>

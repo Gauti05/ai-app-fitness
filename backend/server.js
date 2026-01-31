@@ -1,3 +1,11 @@
+const dns = require('dns');
+
+// Check if we are running on Render
+// Render automatically sets the 'RENDER' variable to true
+if (!process.env.RENDER) {
+    console.log("Local environment detected: using Google DNS fix.");
+    dns.setServers(['8.8.8.8', '8.8.4.4']);
+}
 const express = require('express');
 const dotenv = require('dotenv');
 const cors = require('cors');

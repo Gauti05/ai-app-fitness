@@ -4,6 +4,7 @@ const Profile = require('../models/Profile');
 const Workout = require('../models/Workout');
 const MealPlan = require('../models/MealPlan');
 const ExerciseCache = require('../models/ExerciseCache');
+const Supplement = require('../models/Supplement'); // <--- Import the new model
 
 // Initialize Gemini
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
@@ -290,5 +291,131 @@ exports.chatWithCoach = async (req, res) => {
   } catch (err) {
     console.error("Chat Error:", err.message);
     res.status(503).json({ reply: "I need a moment to think. Try again!" });
+  }
+};
+
+
+
+
+exports.generateSupplements = async (req, res) => {
+  try {
+    const profile = await Profile.findOne({ user: req.user.id });
+    if (!profile) return res.status(400).json({ msg: 'Profile not found' });
+
+    // Health Conditions from Frontend or Profile (if saved)
+    const healthConditions = req.body.healthConditions || [];
+
+    const prompt = `
+      Act as a Board-Certified Sports Nutritionist & Pharmacist. 
+      Create a safe, effective supplement stack for:
+      - Goal: ${profile.goal}
+      - Weight: ${profile.weight}kg
+      - Health Issues: ${healthConditions.length > 0 ? healthConditions.join(", ") : "None"}
+
+      RULES:
+      1. If "Diabetes": Suggest Berberine or Alpha Lipoic Acid. Avoid high-sugar gummies.
+      2. If "High BP": Avoid high-caffeine pre-workouts. Suggest Beetroot extract.
+      3. If "PCOS": Suggest Inositol or Magnesium.
+      4. General: Focus on basics (Creatine, Whey, Vit D, Omega-3).
+
+      OUTPUT JSON ONLY:
+      {
+        "stack": [
+          { "name": "Creatine Monohydrate", "dosage": "5g daily", "timing": "Post-workout", "reason": "Increases muscle power output", "warning": "Drink plenty of water" }
+        ]
+      }
+    `;
+
+    const model = genAI.getGenerativeModel({ model: "gemini-flash-latest" });
+    const result = await model.generateContent(prompt);
+    
+    const text = cleanJSON(result.response.text()); // Use your existing cleanJSON helper
+    const data = JSON.parse(text);
+
+    // Save to DB
+    const suppPlan = await Supplement.findOneAndUpdate(
+      { user: req.user.id },
+      { stack: data.stack, generatedAt: Date.now() },
+      { upsert: true, new: true }
+    );
+
+    res.json(suppPlan);
+
+  } catch (err) {
+    console.error("Supplement Gen Error:", err);
+    res.status(503).json({ msg: "AI is busy. Try again." });
+  }
+};
+
+// @desc    Get Saved Stack
+// @route   GET /api/ai/supplements
+exports.getSupplements = async (req, res) => {
+  try {
+    const stack = await Supplement.findOne({ user: req.user.id });
+    res.json(stack || { stack: [] });
+  } catch (err) {
+    res.status(500).send('Server Error');
+  }
+};
+
+
+exports.generateSupplements = async (req, res) => {
+  try {
+    const profile = await Profile.findOne({ user: req.user.id });
+    if (!profile) return res.status(400).json({ msg: 'Profile not found' });
+
+    // Health Conditions from Frontend or Profile (if saved)
+    const healthConditions = req.body.healthConditions || [];
+
+    const prompt = `
+      Act as a Board-Certified Sports Nutritionist & Pharmacist. 
+      Create a safe, effective supplement stack for:
+      - Goal: ${profile.goal}
+      - Weight: ${profile.weight}kg
+      - Health Issues: ${healthConditions.length > 0 ? healthConditions.join(", ") : "None"}
+
+      RULES:
+      1. If "Diabetes": Suggest Berberine or Alpha Lipoic Acid. Avoid high-sugar gummies.
+      2. If "High BP": Avoid high-caffeine pre-workouts. Suggest Beetroot extract.
+      3. If "PCOS": Suggest Inositol or Magnesium.
+      4. General: Focus on basics (Creatine, Whey, Vit D, Omega-3).
+
+      OUTPUT JSON ONLY:
+      {
+        "stack": [
+          { "name": "Creatine Monohydrate", "dosage": "5g daily", "timing": "Post-workout", "reason": "Increases muscle power output", "warning": "Drink plenty of water" }
+        ]
+      }
+    `;
+
+    const model = genAI.getGenerativeModel({ model: "gemini-flash-latest" });
+    const result = await model.generateContent(prompt);
+    
+    const text = cleanJSON(result.response.text()); // Use your existing cleanJSON helper
+    const data = JSON.parse(text);
+
+    // Save to DB
+    const suppPlan = await Supplement.findOneAndUpdate(
+      { user: req.user.id },
+      { stack: data.stack, generatedAt: Date.now() },
+      { upsert: true, new: true }
+    );
+
+    res.json(suppPlan);
+
+  } catch (err) {
+    console.error("Supplement Gen Error:", err);
+    res.status(503).json({ msg: "AI is busy. Try again." });
+  }
+};
+
+// @desc    Get Saved Stack
+// @route   GET /api/ai/supplements
+exports.getSupplements = async (req, res) => {
+  try {
+    const stack = await Supplement.findOne({ user: req.user.id });
+    res.json(stack || { stack: [] });
+  } catch (err) {
+    res.status(500).send('Server Error');
   }
 };
